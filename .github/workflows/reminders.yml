@@ -1,0 +1,21 @@
+name: Send Vaaniमंथन reminders
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call protected Vercel reminder endpoint
+        env:
+          VERCEL_DEPLOYMENT_URL: ${{ vars.VERCEL_DEPLOYMENT_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$VERCEL_DEPLOYMENT_URL" || { echo "Set repository variable VERCEL_DEPLOYMENT_URL"; exit 1; }
+          test -n "$CRON_SECRET" || { echo "Set repository secret CRON_SECRET"; exit 1; }
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "${VERCEL_DEPLOYMENT_URL%/}/api/cron/reminders"

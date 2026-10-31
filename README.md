@@ -89,10 +89,9 @@ The first backend startup seeds two historical meetings. The ready demo adds a t
 
 ## Deploy the full app on Vercel
 
-The root `vercel.json` deploys the Vite frontend and FastAPI backend as two services, routes `/api/*` to FastAPI, and schedules the protected reminder endpoint every minute. Vercel Functions do not provide durable local SQLite storage, so set `DATABASE_URL` to a managed PostgreSQL connection string in the Vercel project settings. The backend converts standard `postgres://` or `postgresql://` URLs to SQLAlchemy's asyncpg driver. Set `CRON_SECRET` to a long random value and add `GROQ_API_KEY`, `GROQ_LLM_MODEL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, and `GEMINI_EMBED_MODEL` in Vercel's Environment Variables. Never commit these values.
+The root `vercel.json` deploys the Vite frontend and FastAPI backend as two services and routes `/api/*` to FastAPI. Vercel Functions do not provide durable local SQLite storage, so set `DATABASE_URL` to a managed PostgreSQL connection string in the Vercel project settings. The backend converts standard `postgres://` or `postgresql://` URLs to SQLAlchemy's asyncpg driver. Set `CRON_SECRET` to a long random value and add `GROQ_API_KEY`, `GROQ_LLM_MODEL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, and `GEMINI_EMBED_MODEL` in Vercel's Environment Variables. Never commit these values.
 
-Vercel Cron schedules that run every minute require Pro or Enterprise. Hobby projects are limited to one cron run per day, which is too infrequent for the T-24h/T-2h reminders. Keep the local APScheduler for development; Vercel uses the authenticated `/api/cron/reminders` function instead. Connect the GitHub repository to Vercel or deploy from the project root with the Vercel CLI after linking the project.
-
+For Vercel Hobby, reminders use the external GitHub Actions workflow at `.github/workflows/reminders.yml`, which calls the protected `/api/cron/reminders` endpoint every five minutes. In GitHub repository settings, add the Actions variable `VERCEL_DEPLOYMENT_URL` (the production origin, such as `https://your-project.vercel.app`) and Actions secret `CRON_SECRET` using the same value configured in Vercel. The workflow can also be triggered manually. Keep the local APScheduler for development. Connect the GitHub repository to Vercel or deploy from the project root with the Vercel CLI after linking the project.
 ## Tests
 
 From the project root:
