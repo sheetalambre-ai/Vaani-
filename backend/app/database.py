@@ -13,9 +13,15 @@ elif database_url.startswith("postgresql://"):
 
 if database_url.startswith("postgresql+asyncpg://"):
     # Hosted-provider URLs often include libpq's sslmode parameter; asyncpg
-    # expects TLS through its ssl argument instead.
+    # expects TLS through its ssl argument instead. Neon also emits
+    # channel_binding=require, which asyncpg does not accept as a URL option.
     parts = urlsplit(database_url)
-    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "sslmode"]
+    unsupported_asyncpg_options = {"sslmode", "channel_binding"}
+    query = [
+        (key, value)
+        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+        if key.lower() not in unsupported_asyncpg_options
+    ]
     database_url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 engine_options = {"echo": False}
