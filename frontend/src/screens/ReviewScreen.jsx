@@ -124,7 +124,7 @@ export default function ReviewScreen({ data: initialData, onPublished, onLoadDem
   const approvedCount = data.action_items.filter((a) => a.status === "approved").length;
 
   return (
-    <div className="space-y-8">
+    <div className="review-screen space-y-7">
       {/* Toast */}
       {toast && (
         <div
@@ -141,23 +141,23 @@ export default function ReviewScreen({ data: initialData, onPublished, onLoadDem
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="review-header flex items-center justify-between">
         <div>
-          <p className="screen-eyebrow">Meeting review</p>
+          <p className="screen-eyebrow">Meeting review · private until approved</p>
           <h1 className="screen-title !text-3xl !m-0">{data.title}</h1>
-          <p className="text-sm text-gray-500 mt-1">{new Date(data.held_at).toLocaleString()}</p>
+          <p className="review-date text-sm text-gray-500 mt-1">{new Date(data.held_at).toLocaleString()}</p>
         </div>
         <button
           onClick={handlePublish}
           disabled={publishing || approvedCount === 0}
-          className="px-5 py-2.5 rounded-full bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-semibold text-sm transition-colors"
+          className="publish-button px-5 py-2.5 rounded-full bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-semibold text-sm transition-colors"
         >
           {publishing ? "Publishing…" : `Publish ${approvedCount} approved item${approvedCount !== 1 ? "s" : ""}`}
         </button>
       </div>
 
       {/* Voice correction */}
-      <div className="flex gap-2 bg-gray-900 border border-gray-700 rounded-xl p-3">
+      <div className="review-correction flex gap-2 bg-gray-900 border border-gray-700 rounded-xl p-3">
         <input
           value={correction}
           onChange={(e) => setCorrection(e.target.value)}
@@ -174,7 +174,7 @@ export default function ReviewScreen({ data: initialData, onPublished, onLoadDem
       </div>
 
       {/* Raw vs Cleaned */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="review-transcripts grid grid-cols-2 gap-4">
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Raw input</p>
           <p className="text-sm text-gray-400 leading-relaxed whitespace-pre-wrap">{data.raw_input}</p>
@@ -201,12 +201,12 @@ export default function ReviewScreen({ data: initialData, onPublished, onLoadDem
 
       {/* Conflicts */}
       {data.conflicts?.length > 0 && (
-        <Section title={`⚠️ Conflicts (${data.conflicts.length})`}>
+        <Section className="review-conflicts" title={`Conflict check · ${data.conflicts.length}`}>
           {data.conflicts.map((c) => {
             const newD = data.decisions.find((d) => d.id === c.new_decision_id);
             const oldD = data.decisions.find((d) => d.id === c.old_decision_id);
             return (
-              <div key={c.id} className="bg-gray-900 border border-red-700/50 rounded-xl p-4 space-y-3">
+              <div key={c.id} className="review-conflict-card bg-gray-900 border border-red-700/50 rounded-xl p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase ${
                     c.severity === "high" ? "bg-red-700 text-red-100" :
@@ -232,8 +232,8 @@ export default function ReviewScreen({ data: initialData, onPublished, onLoadDem
                 </div>
                 {c.resolution === "open" && (
                   <div className="flex gap-2">
-                    <button onClick={() => handleResolve(c.id, "accepted_new")} className="flex-1 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-xs font-medium">Accept new</button>
-                    <button onClick={() => handleResolve(c.id, "kept_old")} className="flex-1 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium">Keep old</button>
+                    <button onClick={() => handleResolve(c.id, "accepted_new")} className="conflict-accept flex-1 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-xs font-medium">Keep new decision</button>
+                    <button onClick={() => handleResolve(c.id, "kept_old")} className="conflict-keep flex-1 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium">Keep earlier decision</button>
                   </div>
                 )}
               </div>
@@ -242,11 +242,12 @@ export default function ReviewScreen({ data: initialData, onPublished, onLoadDem
         </Section>
       )}
 
+      <div className="review-grid">
       {/* Decisions */}
       {data.decisions?.length > 0 && (
-        <Section title={`Decisions (${data.decisions.length})`}>
+        <Section className="review-decisions" title={`Decisions · ${data.decisions.length}`}>
           {data.decisions.map((d) => (
-            <div key={d.id} className="bg-gray-900 border border-gray-700 rounded-xl p-4 space-y-1">
+            <div key={d.id} className={`review-decision-card bg-gray-900 border border-gray-700 rounded-xl p-4 space-y-1 ${d.status === "conflicted" ? "is-conflicted" : d.status === "superseded" ? "is-superseded" : "is-active"}`}>
               <p className="text-sm font-medium text-white">{d.statement}</p>
               {d.evidence_quote && <p className="text-xs text-gray-500 italic">"{d.evidence_quote}"</p>}
               {d.decided_by && <p className="text-xs text-gray-600">Decided by: {d.decided_by}</p>}
@@ -261,9 +262,9 @@ export default function ReviewScreen({ data: initialData, onPublished, onLoadDem
 
       {/* Action Items */}
       {data.action_items?.length > 0 && (
-        <Section title={`Action Items (${data.action_items.length})`}>
+        <Section className="review-actions" title={`Action items · ${data.action_items.length}`}>
           {data.action_items.map((a) => (
-            <div key={a.id} className="bg-gray-900 border border-gray-700 rounded-xl p-4 space-y-2">
+            <div key={a.id} className={`review-action-card bg-gray-900 border border-gray-700 rounded-xl p-4 space-y-2 status-${a.status}`}>
               {editingItem?.id === a.id ? (
                 <div className="space-y-2">
                   <input className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none" value={editingItem.task} onChange={(e) => setEditingItem({ ...editingItem, task: e.target.value })} placeholder="Task" />
@@ -289,10 +290,10 @@ export default function ReviewScreen({ data: initialData, onPublished, onLoadDem
                   {a.done_definition && <p className="text-xs text-gray-500">Done when: {a.done_definition}</p>}
                   {a.evidence_quote && <p className="text-xs text-gray-600 italic">"{a.evidence_quote}"</p>}
                   {a.status === "pending_review" && (
-                    <div className="flex gap-2 pt-1">
-                      <button onClick={() => handleApprove(a.id)} className="px-3 py-1 rounded bg-green-700 hover:bg-green-600 text-white text-xs font-medium">Approve</button>
-                      <button onClick={() => setEditingItem({ id: a.id, task: a.task, owner: a.owner, due_date: a.due_date })} className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-white text-xs">Edit</button>
-                      <button onClick={() => handleReject(a.id)} className="px-3 py-1 rounded bg-red-900 hover:bg-red-800 text-white text-xs">Reject</button>
+                    <div className="review-item-actions">
+                      <button onClick={() => handleApprove(a.id)} className="action-button action-approve px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-semibold">✓ Approve</button>
+                      <button onClick={() => setEditingItem({ id: a.id, task: a.task, owner: a.owner, due_date: a.due_date })} className="action-button action-edit px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs font-semibold">✎ Edit</button>
+                      <button onClick={() => handleReject(a.id)} className="action-button action-reject px-3 py-1.5 rounded-lg bg-red-900 hover:bg-red-800 text-white text-xs font-semibold">× Reject</button>
                     </div>
                   )}
                 </>
@@ -301,16 +302,17 @@ export default function ReviewScreen({ data: initialData, onPublished, onLoadDem
           ))}
         </Section>
       )}
+      </div>
     </div>
   );
 }
 
-function Section({ title, children }) {
+function Section({ title, children, className = "" }) {
   return (
-    <div>
-      <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">{title}</h2>
-      <div className="space-y-3">{children}</div>
-    </div>
+    <section className={`review-section ${className}`}>
+      <h2 className="review-section-title text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">{title}</h2>
+      <div className="review-section-content space-y-3">{children}</div>
+    </section>
   );
 }
 
