@@ -21,14 +21,21 @@ async def _call_openai_compat(base_url: str, api_key: str, model: str, messages:
 
 
 async def _call_gemini(messages: list, model: str) -> str:
-    # Convert OpenAI messages to Gemini format
-    parts = []
-    for m in messages:
-        parts.append({"text": m["content"]})
+    # Gemini separates system instructions from role-tagged conversation turns.
+    system_text = "\n\n".join(
+        m["content"] for m in messages if m.get("role") in {"system", "developer"}
+    )
+    contents = [
+        {"role": "model" if m.get("role") == "assistant" else "user",
+         "parts": [{"text": m["content"]}]}
+        for m in messages if m.get("role") not in {"system", "developer"}
+    ]
     payload = {
-        "contents": [{"parts": parts}],
+        "contents": contents,
         "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1},
     }
+    if system_text:
+        payload["systemInstruction"] = {"parts": [{"text": system_text}]}
     model_path = model if model.startswith("models/") else f"models/{model}"
     url = f"https://generativelanguage.googleapis.com/v1beta/{model_path}:generateContent?key={settings.GEMINI_API_KEY}"
     async with httpx.AsyncClient(timeout=60) as client:

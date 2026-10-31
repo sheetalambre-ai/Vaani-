@@ -83,16 +83,12 @@ async def process_meeting(db: AsyncSession, raw_input: str, title: str = None, h
 
 
 async def build_review_payload(db: AsyncSession, meeting_id: int) -> dict:
-    from sqlalchemy import select
     from app import models
 
     meeting = await repository.get_meeting(db, meeting_id)
 
     # Utterances
-    result = await db.execute(
-        __import__("sqlalchemy", fromlist=["select"]).select(models.Utterance).where(models.Utterance.meeting_id == meeting_id)
-    )
-    utterances = result.scalars().all()
+    utterances = await repository.get_meeting_utterances(db, meeting_id)
 
     # Decisions
     decisions = await repository.get_meeting_decisions(db, meeting_id)
@@ -111,10 +107,7 @@ async def build_review_payload(db: AsyncSession, meeting_id: int) -> dict:
                 decision_ids.add(old_decision.id)
 
     # Corrections
-    result2 = await db.execute(
-        __import__("sqlalchemy", fromlist=["select"]).select(models.Correction).where(models.Correction.meeting_id == meeting_id)
-    )
-    corrections = result2.scalars().all()
+    corrections = await repository.get_meeting_corrections(db, meeting_id)
 
     def decision_dict(d: models.Decision):
         return {

@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     GITHUB_REPO: Optional[str] = None
 
     TELEGRAM_BOT_TOKEN: Optional[str] = None
+    CRON_SECRET: Optional[str] = None
+    VERCEL: Optional[str] = None
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./vaanimanthan.db"
 

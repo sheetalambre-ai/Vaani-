@@ -11,33 +11,37 @@ export default function App() {
   const nav = (s) => setScreen(s);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 font-sans">
-      {/* Nav */}
-      <nav className="flex items-center gap-1 px-6 py-3 border-b border-gray-800 bg-gray-900">
-        <span className="text-violet-400 font-bold text-lg mr-6">Vaaniमंथन</span>
-        {["speak", "review", "board"].map((s) => (
-          <button
-            key={s}
-            onClick={() => nav(s)}
-            className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${
-              screen === s
-                ? "bg-violet-600 text-white"
-                : "text-gray-400 hover:text-white hover:bg-gray-800"
-            }`}
-          >
-            {s === "speak" ? "🎙 Speak" : s === "review" ? "📋 Review" : "📊 Board"}
-          </button>
-        ))}
-      </nav>
+    <div className="app-shell min-h-screen font-sans">
+      <header className="app-topbar">
+        <button className="wordmark" onClick={() => nav("speak")} aria-label="Vaaniमंथन home">
+          Vaani<span>मंथन</span>
+        </button>
+        <nav className="app-nav" aria-label="Main navigation">
+          {["speak", "review", "board"].map((s) => (
+            <button
+              key={s}
+              onClick={() => nav(s)}
+              className={`nav-link ${screen === s ? "nav-link-active" : ""}`}
+            >
+              <span className="nav-link-icon" aria-hidden="true">
+                {s === "speak" ? "◉" : s === "review" ? "◇" : "▦"}
+              </span>
+              {s === "speak" ? "Speak" : s === "review" ? "Review" : "Board"}
+            </button>
+          ))}
+        </nav>
+        <div className="topbar-note"><span className="status-dot" /> Voice intelligence workspace</div>
+      </header>
 
       {/* Screens */}
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="app-main">
         {screen === "speak" && (
           <SpeakScreen
             onReview={(data) => {
               setReviewData(data);
               setScreen("review");
             }}
+            onOpenReview={() => setScreen("review")}
           />
         )}
         {screen === "review" && (
@@ -47,8 +51,9 @@ export default function App() {
             onPublished={() => setScreen("board")}
           />
         )}
-        {screen === "board" && <BoardScreen />}
+        {screen === "board" && <BoardScreen onNewMeeting={() => setScreen("speak")} />}
       </main>
+      <footer className="app-footer"><span>Vaaniमंथन</span><span>Listen · Understand · Execute</span></footer>
     </div>
   );
 }

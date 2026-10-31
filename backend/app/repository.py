@@ -245,3 +245,23 @@ async def get_notifications(db: AsyncSession) -> list[models.Notification]:
 async def get_meeting_decisions(db: AsyncSession, meeting_id: int) -> list[models.Decision]:
     result = await db.execute(select(models.Decision).where(models.Decision.meeting_id == meeting_id))
     return list(result.scalars().all())
+
+
+async def get_all_decisions(db: AsyncSession) -> list[models.Decision]:
+    result = await db.execute(select(models.Decision))
+    return list(result.scalars().all())
+
+
+async def get_open_conflicts(db: AsyncSession) -> list[models.Conflict]:
+    result = await db.execute(select(models.Conflict).where(models.Conflict.resolution == "open"))
+    return list(result.scalars().all())
+
+
+async def get_meeting_utterances(db: AsyncSession, meeting_id: int) -> list[models.Utterance]:
+    result = await db.execute(select(models.Utterance).where(models.Utterance.meeting_id == meeting_id))
+    return list(result.scalars().all())
+
+
+async def get_meeting_corrections(db: AsyncSession, meeting_id: int) -> list[models.Correction]:
+    result = await db.execute(select(models.Correction).where(models.Correction.meeting_id == meeting_id))
+    return list(result.scalars().all())

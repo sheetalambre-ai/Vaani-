@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Optional
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import os
 
 from app.database import init_db, get_db
 from app.seed import seed_if_empty, seed_demo_review, DEMO_DICTATION
@@ -28,15 +29,28 @@ async def lifespan(_: FastAPI):
     from app.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         await seed_if_empty(db)
-    scheduler.add_job(_scheduled_reminders, "interval", minutes=1, id="reminders", replace_existing=True)
-    scheduler.start()
+    if not os.getenv("VERCEL"):
+        scheduler.add_job(_scheduled_reminders, "interval", minutes=1, id="reminders", replace_existing=True)
+        scheduler.start()
     try:
         yield
     finally:
-        scheduler.shutdown(wait=False)
+        if scheduler.running:
+            scheduler.shutdown(wait=False)
 
 
 app = FastAPI(title="Vaaniमंथन", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def strip_vercel_api_prefix(request: Request, call_next):
+    path = request.scope.get("path", "")
+    if path.startswith("/api/"):
+        request.scope["path"] = path[4:]
+        raw_path = request.scope.get("raw_path")
+        if raw_path:
+            request.scope["raw_path"] = raw_path[4:]
+    return await call_next(request)
 
 app.add_middleware(
     CORSMiddleware,
@@ -269,6 +283,17 @@ async def simulate_time(db: AsyncSession = Depends(get_db)):
 async def get_notifications(db: AsyncSession = Depends(get_db)):
     notes = await repository.get_notifications(db)
     return [{"id": n.id, "message": n.message, "created_at": n.created_at.isoformat(), "read": n.read} for n in notes]
+
+
+@app.get("/cron/reminders", include_in_schema=False)
+async def run_reminder_cron(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.config import settings
+    if not settings.CRON_SECRET:
+        raise HTTPException(status_code=503, detail="CRON_SECRET is not configured")
+    if request.headers.get("authorization") != f"Bearer {settings.CRON_SECRET}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    fired = await reminder_agent.fire_due_reminders(db)
+    return {"fired_reminder_ids": fired}
 
 
 @app.get("/demo-dictation")

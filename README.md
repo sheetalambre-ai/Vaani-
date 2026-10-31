@@ -67,7 +67,7 @@ python -m pip install -r backend\requirements.txt
 Copy-Item .env.example .env
 ```
 
-For live extraction and conflict classification, set `GROQ_API_KEY` in `.env`. The sample file contains configurable model names. Gemini and OpenRouter are optional. Keep `TRACKER=mock` for a safe demo. For Trello, set `TRELLO_KEY`, `TRELLO_TOKEN`, and `TRELLO_LIST_ID`. For GitHub, set `GITHUB_TOKEN` and `GITHUB_REPO` (`owner/repository`).
+For live extraction and conflict classification, add your provider keys to the project-root `.env` file (copy `.env.example` first). Groq is tried first; Gemini and OpenRouter are optional fallbacks. To configure Gemini, set `GEMINI_API_KEY` and `GEMINI_MODEL`; Gemini embeddings are also used for decision memory when `GEMINI_EMBED_MODEL` is configured. Keep these keys in `.env` on your machine and never commit or paste them into chat. Restart the backend after changing `.env`. Keep `TRACKER=mock` for a safe demo. For Trello, set `TRELLO_KEY`, `TRELLO_TOKEN`, and `TRELLO_LIST_ID`. For GitHub, set `GITHUB_TOKEN` and `GITHUB_REPO` (`owner/repository`).
 
 Start the backend from the project root:
 
@@ -86,6 +86,12 @@ npm run dev
 Open the Vite URL (normally `http://localhost:5173`). FastAPI runs at `http://localhost:8000`; its interactive API docs are at `/docs`.
 
 The first backend startup seeds two historical meetings. The ready demo adds a third seeded meeting once and is safe to open repeatedly. Local SQLite data is stored in `vaanimanthan.db` in the project root and is excluded from Git.
+
+## Deploy the full app on Vercel
+
+The root `vercel.json` deploys the Vite frontend and FastAPI backend as two services, routes `/api/*` to FastAPI, and schedules the protected reminder endpoint every minute. Vercel Functions do not provide durable local SQLite storage, so set `DATABASE_URL` to a managed PostgreSQL connection string in the Vercel project settings. The backend converts standard `postgres://` or `postgresql://` URLs to SQLAlchemy's asyncpg driver. Set `CRON_SECRET` to a long random value and add `GROQ_API_KEY`, `GROQ_LLM_MODEL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, and `GEMINI_EMBED_MODEL` in Vercel's Environment Variables. Never commit these values.
+
+Vercel Cron schedules that run every minute require Pro or Enterprise. Hobby projects are limited to one cron run per day, which is too infrequent for the T-24h/T-2h reminders. Keep the local APScheduler for development; Vercel uses the authenticated `/api/cron/reminders` function instead. Connect the GitHub repository to Vercel or deploy from the project root with the Vercel CLI after linking the project.
 
 ## Tests
 

@@ -143,13 +143,14 @@ export default function ReviewScreen({ data: initialData, onPublished, onLoadDem
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{data.title}</h1>
+          <p className="screen-eyebrow">Meeting review</p>
+          <h1 className="screen-title !text-3xl !m-0">{data.title}</h1>
           <p className="text-sm text-gray-500 mt-1">{new Date(data.held_at).toLocaleString()}</p>
         </div>
         <button
           onClick={handlePublish}
           disabled={publishing || approvedCount === 0}
-          className="px-5 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white font-semibold text-sm transition-colors"
+          className="px-5 py-2.5 rounded-full bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-semibold text-sm transition-colors"
         >
           {publishing ? "Publishing…" : `Publish ${approvedCount} approved item${approvedCount !== 1 ? "s" : ""}`}
         </button>
