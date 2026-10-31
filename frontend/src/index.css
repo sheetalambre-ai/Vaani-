@@ -102,3 +102,79 @@ button { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+/* Vaani dashboard refinements: clear hierarchy, audio-led identity, and calm actionable states. */
+:root {
+  --canvas: #f7f4f2;
+  --paper: rgba(255, 253, 251, .94);
+  --paper-solid: #fffdfb;
+  --ink: #211d2c;
+  --muted: #77717d;
+  --line: #e9e2e4;
+  --purple: #67539b;
+  --purple-soft: #f0ebf8;
+  --lavender: #a496cf;
+  --shadow-soft: 0 18px 55px rgba(51, 37, 57, .065);
+}
+
+body { background: var(--canvas); }
+.app-shell { min-height: 100vh; background: radial-gradient(ellipse at 80% -15%, #fff 0, transparent 42%), var(--canvas); }
+.app-topbar { position: sticky; top: 0; z-index: 20; height: 68px; padding-inline: clamp(20px, 4vw, 64px); gap: clamp(24px, 5vw, 72px); background: rgba(255,253,251,.88); border-bottom-color: #e8e0e3; }
+.wordmark { font-size: 23px; }
+.app-nav { gap: 5px; }
+.nav-link { padding: 9px 14px; }
+.nav-link-active { background: #eee8f7; box-shadow: inset 0 0 0 1px rgba(103,83,155,.08); }
+.topbar-note { font-size: 11px; }
+.app-main { width: min(1360px, calc(100% - 56px)); padding-top: clamp(30px, 4vw, 48px); }
+.app-footer { width: min(1360px, calc(100% - 56px)); }
+
+/* Paper surfaces and headings */
+.bg-gray-900 { background-color: var(--paper) !important; }
+.bg-gray-800 { background-color: #f6f2f4 !important; }
+.bg-gray-700 { background-color: #eee9ec !important; }
+.border-gray-800, .border-gray-700, .border-gray-600 { border-color: var(--line) !important; }
+.paper-card { background: var(--paper-solid); box-shadow: 0 10px 34px rgba(52,39,58,.035); }
+.screen-eyebrow { color: #75659b; letter-spacing: .16em; }
+.screen-title { letter-spacing: -.05em; }
+
+/* Give transcript, memory, decisions, and task rows their own legible surfaces. */
+.app-main .rounded-xl { border-radius: 17px; }
+.app-main .rounded-lg { border-radius: 11px; }
+.app-main .bg-gray-900.border { box-shadow: 0 4px 18px rgba(52,39,58,.025); }
+.app-main button { transition: transform .16s ease, background-color .16s ease, box-shadow .16s ease; }
+.app-main button:not(:disabled):hover { transform: translateY(-1px); }
+.app-main button:focus-visible, .app-topbar button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid rgba(119,98,177,.28); outline-offset: 2px; }
+.app-main input, .app-main textarea { border-color: #e5dcdf; background-color: #fffdfb; color: var(--ink); }
+.app-main input::placeholder, .app-main textarea::placeholder { color: #9a929d; }
+.app-main input:focus, .app-main textarea:focus { border-color: #a99aca; box-shadow: 0 0 0 3px rgba(119,98,177,.09); }
+
+/* Readable contrast for semantic status chips. */
+.bg-violet-600 { background-color: #241d35 !important; }
+.app-main [class~="hover:bg-violet-500"]:hover { background-color: #3b3154 !important; }
+.text-violet-400 { color: #665192 !important; }
+.text-green-300, .text-green-400 { color: #39775b !important; }
+.text-red-300, .text-red-400 { color: #a14756 !important; }
+.text-amber-300, .text-amber-400 { color: #8a5e14 !important; }
+.app-main [class~="bg-red-900/40"] { background-color: #fff0f0 !important; }
+.app-main [class~="bg-amber-900/40"], .app-main [class~="bg-amber-900/20"] { background-color: #fbf4e9 !important; }
+.app-main [class~="bg-green-900/40"] { background-color: #eaf4ed !important; }
+.app-main [class~="bg-blue-900/40"] { background-color: #edf0fa !important; }
+
+.metric-card { padding: 17px 19px; border-radius: 17px; transition: transform .18s ease, box-shadow .18s ease; }
+.metric-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(60,43,63,.07); }
+.metric-number { font-family: Georgia, 'Times New Roman', serif; }
+.voice-hero { background: linear-gradient(115deg, rgba(255,253,251,.98), rgba(244,240,249,.88) 66%, rgba(251,246,241,.97)); }
+.voice-wave { filter: drop-shadow(0 3px 9px rgba(116,96,158,.09)); }
+
+@media (min-width: 1100px) {
+  .app-main { width: min(1440px, calc(100% - 80px)); }
+}
+@media (max-width: 800px) {
+  .app-main { width: min(100% - 32px, 1240px); }
+  .app-footer { width: min(100% - 32px, 1240px); }
+}
+@media (max-width: 680px) {
+  .app-topbar { position: static; }
+  .app-main { padding-top: 26px; }
+  .screen-title { font-size: clamp(34px, 10vw, 48px); }
+  .metric-card { padding: 14px; }
+}
