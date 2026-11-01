@@ -834,6 +834,8 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 3px solid
 :root[data-theme="dark"] .review-section-title { color: #ddd2ed !important; }
 :root[data-theme="dark"] .review-decision-card .text-white,
 :root[data-theme="dark"] .review-action-card .text-white { color: #f4eff8 !important; }
+:root[data-theme="dark"] .review-item-actions .action-reject { border-color: #71464b !important; background: #482a30 !important; color: #ffc1bd !important; }
+:root:not([data-theme="dark"]) .review-item-actions .action-reject { border-color: #e8b9b8 !important; background: #fff0ef !important; color: #9d343e !important; }
 :root[data-theme="dark"] .review-decision-card .text-gray-500,
 :root[data-theme="dark"] .review-action-card .text-gray-500,
 :root[data-theme="dark"] .review-action-card .text-gray-400 { color: #c0b7ca !important; }
