@@ -1,12 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { getBoard, getDigest, sendDigest, simulateTime, getNotifications } from "../api.js";
+import { getBoard, getDigest, sendDigest, getNotifications, completeItem } from "../api.js";
 
-export default function BoardScreen({ onNewMeeting }) {
+const STATUS_ORDER = ["pending_review", "approved", "created", "done", "rejected"];
+const STATUS_META = {
+  pending_review: { label: "Needs review", color: "review", icon: "◇" },
+  approved: { label: "Approved", color: "approved", icon: "✓" },
+  created: { label: "In progress", color: "active", icon: "↗" },
+  done: { label: "Completed", color: "done", icon: "✓" },
+  rejected: { label: "Declined", color: "rejected", icon: "×" },
+};
+
+export default function BoardScreen({ onNewMeeting, onOpenReview }) {
   const [board, setBoard] = useState({});
   const [notifications, setNotifications] = useState([]);
   const [digestPerson, setDigestPerson] = useState("");
   const [digest, setDigest] = useState(null);
-  const [simResult, setSimResult] = useState(null);
+  const [digestLoading, setDigestLoading] = useState(false);
+  const [digestSending, setDigestSending] = useState(false);
+  const [busyItemId, setBusyItemId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -30,45 +41,70 @@ export default function BoardScreen({ onNewMeeting }) {
   async function handleDigest() {
     if (!digestPerson.trim()) return;
     setError("");
+    setDigestLoading(true);
     try {
       const d = await getDigest(digestPerson);
       setDigest(d);
     } catch (e) {
       setError(e.message || "Could not load the digest");
+    } finally {
+      setDigestLoading(false);
     }
   }
 
   async function handleSendDigest() {
     if (!digestPerson.trim()) return;
+    if (!window.confirm(`Send ${digestPerson}'s weekly digest now?`)) return;
     setError("");
+    setDigestSending(true);
     try {
       await sendDigest(digestPerson);
       await loadAll();
     } catch (e) {
       setError(e.message || "Could not send the digest");
+    } finally {
+      setDigestSending(false);
     }
   }
 
-  async function handleSimulate() {
+  async function handleOpenReview(item) {
     setError("");
     try {
-      const result = await simulateTime();
-      setSimResult(result);
-      await loadAll();
+      await onOpenReview(item.meeting_id);
     } catch (e) {
-      setError(e.message || "Could not simulate reminder time");
+      setError(e.message || "Could not open the meeting review");
     }
   }
 
-  const STATUS_ORDER = ["pending_review", "approved", "created", "done", "rejected"];
-  const STATUS_LABELS = {
-    pending_review: "Pending Review",
-    approved: "Approved",
-    created: "Created",
-    done: "Done",
-    rejected: "Rejected",
-  };
+  async function handleComplete(item) {
+    setError("");
+    setBusyItemId(item.id);
+    try {
+      await completeItem(item.id);
+      await loadAll();
+    } catch (e) {
+      setError(e.message || "Could not complete the task");
+    } finally {
+      setBusyItemId(null);
+    }
+  }
+
   const allItems = Object.values(board).flat();
+  const people = [...new Set(allItems
+    .filter((item) => item.owner && item.status !== "rejected")
+    .map((item) => item.owner.trim())
+    .filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const peopleKey = people.join("|");
+  useEffect(() => {
+    if (people.length && !people.includes(digestPerson)) {
+      setDigestPerson(people[0]);
+      setDigest(null);
+    }
+    if (!people.length) {
+      setDigestPerson("");
+      setDigest(null);
+    }
+  }, [peopleKey, digestPerson]);
   const pendingCount = allItems.filter((item) => item.status === "pending_review").length;
   const approvedCount = allItems.filter((item) => item.status === "approved" || item.status === "created").length;
   const doneCount = allItems.filter((item) => item.status === "done").length;
@@ -84,36 +120,29 @@ export default function BoardScreen({ onNewMeeting }) {
   if (loading) return <div className="text-center py-20 text-gray-500">Loading board…</div>;
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className="board-screen space-y-7">
+      <div className="board-page-header flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="screen-eyebrow">Your execution space</p>
-          <h1 className="screen-title !text-4xl sm:!text-5xl">Good morning.</h1>
-          <p className="screen-subtitle">Here’s what’s moving forward across your meetings.</p>
+          <h1 className="screen-title !text-4xl sm:!text-5xl">Meetings, into momentum.</h1>
+          <p className="screen-subtitle">A clear view of decisions, owners, and what needs to happen next.</p>
         </div>
         <div className="flex gap-2 pb-1">
-          <button onClick={handleSimulate} className="px-4 py-2.5 rounded-full border border-violet-500 text-violet-400 hover:bg-violet-900/30 text-sm transition-colors">◷ Simulate time</button>
-          <button onClick={onNewMeeting} className="px-4 py-2.5 rounded-full bg-violet-600 text-white hover:bg-violet-500 text-sm font-medium">＋ New meeting</button>
+          <button onClick={loadAll} className="board-secondary-button" aria-label="Refresh board">↻ Refresh</button>
+          <button onClick={onNewMeeting} className="board-primary-button">＋ New meeting</button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Metric label="Pending review" value={pendingCount} icon="◇" />
-        <Metric label="Approved / created" value={approvedCount} icon="↗" />
-        <Metric label="Due this week" value={dueSoonCount} icon="◷" />
-        <Metric label="Completed" value={doneCount} icon="✓" />
+        <Metric label="Needs review" value={pendingCount} icon="◇" color="review" />
+        <Metric label="Approved / active" value={approvedCount} icon="↗" color="active" />
+        <Metric label="Due this week" value={dueSoonCount} icon="◷" color="due" />
+        <Metric label="Completed" value={doneCount} icon="✓" color="done" />
       </div>
 
-      <section className="voice-hero">
-        <div className="relative z-10 grid md:grid-cols-[1fr_.8fr] gap-5 items-center p-5 sm:p-7">
-          <div>
-            <p className="screen-eyebrow">Listen · Understand · Execute</p>
-            <h2 className="mt-2 font-serif text-2xl sm:text-3xl text-gray-900">Turn the next conversation into momentum.</h2>
-            <p className="mt-2 text-sm text-gray-500">Capture what matters. Vaaniमंथन will help keep every commitment in view.</p>
-            <button onClick={onNewMeeting} className="mt-4 px-4 py-2 rounded-full bg-violet-600 text-white text-sm hover:bg-violet-500">Start a meeting →</button>
-          </div>
-          <BoardWave />
-        </div>
+      <section className="board-audio-banner">
+        <div><p className="screen-eyebrow">Listen · Understand · Execute</p><h2>Every promise has a next step.</h2><p>Decisions stay connected to the people and deadlines that move them forward.</p></div>
+        <BoardWave />
       </section>
 
       {error && (
@@ -122,81 +151,56 @@ export default function BoardScreen({ onNewMeeting }) {
         </div>
       )}
 
-      {simResult && (
-        <div className="bg-amber-900/20 border border-amber-700/40 text-amber-300 rounded-lg px-4 py-2 text-sm">
-          Fired {simResult.fired_reminder_ids?.length || 0} reminder(s)
-        </div>
-      )}
-
-      {/* Board columns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {STATUS_ORDER.filter((s) => board[s]?.length > 0).map((status) => (
-          <div key={status} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              {STATUS_LABELS[status]} ({board[status].length})
-            </h3>
-            <div className="space-y-2">
-              {board[status].map((item) => (
-                <div key={item.id} className="bg-gray-800 rounded-lg p-3">
-                  <p className="text-sm text-white font-medium">{item.task}</p>
-                  <div className="flex gap-3 text-xs text-gray-500 mt-1">
-                    <span>👤 {item.owner || "—"}</span>
-                    <span>📅 {item.due_date || "—"}</span>
+      <div className="board-content-grid">
+        <section className="board-panel board-lanes-panel">
+          <div className="board-panel-heading"><div><p className="screen-eyebrow">From conversation to action</p><h2>Action board</h2></div><span>{allItems.length} commitments</span></div>
+          <div className="board-lanes">
+            {STATUS_ORDER.map((status) => {
+              const meta = STATUS_META[status];
+              const laneItems = board[status] || [];
+              return <section key={status} className={`board-lane lane-${meta.color}`}>
+                <header><span className="lane-icon">{meta.icon}</span><span>{meta.label}</span><b>{laneItems.length}</b></header>
+                {laneItems.length ? laneItems.map((item) => <article className="board-task" key={item.id}>
+                  <p className="board-task-title">{item.task}</p>
+                  <p className="board-task-meeting">{item.meeting_title}</p>
+                  <div className="board-task-meta"><span>♙ {item.owner || "Unassigned"}</span><span>◷ {formatDue(item.due_date)}</span></div>
+                  <div className="board-task-actions">
+                    {status === "created" ? <button disabled={busyItemId === item.id} onClick={() => handleComplete(item)} className="task-action task-action-complete">{busyItemId === item.id ? "Saving…" : "✓ Mark complete"}</button> : status === "pending_review" || status === "approved" ? <button onClick={() => handleOpenReview(item)} className="task-action task-action-review">Review meeting →</button> : null}
+                    {item.external_ref && <a href={item.external_ref} target="_blank" rel="noopener noreferrer" className="task-action task-action-link">Open tracker ↗</a>}
                   </div>
-                  {item.external_ref && (
-                    <a href={item.external_ref} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline mt-1 block truncate">
-                      {item.external_ref}
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
+                </article>) : <p className="board-lane-empty">Nothing here yet</p>}
+              </section>;
+            })}
           </div>
-        ))}
-        {Object.keys(board).length === 0 && (
-          <div className="col-span-3 text-center py-12 text-gray-600">No items yet</div>
-        )}
-      </div>
+          {!allItems.length && <div className="board-empty"><span>✧</span><h3>Your board starts with a conversation.</h3><p>Process a meeting to bring its decisions and commitments here.</p><button onClick={onNewMeeting} className="board-primary-button">Start a meeting →</button></div>}
+        </section>
 
-      {/* Digest */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Weekly Digest</h2>
-        <div className="flex gap-2">
-          <input
-            value={digestPerson}
-            onChange={(e) => setDigestPerson(e.target.value)}
-            placeholder="Person name (e.g. Priya)"
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-violet-500"
-          />
-          <button onClick={handleDigest} className="px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm">View</button>
-          <button onClick={handleSendDigest} className="px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm">Send now</button>
-        </div>
+        <aside className="board-sidebar">
+          <section className="board-panel digest-panel">
+            <div className="board-panel-heading"><div><p className="screen-eyebrow">A focused weekly view</p><h2>Weekly digest</h2></div><span className="digest-spark">⌁</span></div>
+            <label className="digest-select-label" htmlFor="digest-person">Choose a teammate</label>
+            <select id="digest-person" value={digestPerson} onChange={(e) => { setDigestPerson(e.target.value); setDigest(null); }} disabled={!people.length} className="digest-select">
+              {!people.length && <option value="">No owners yet</option>}
+              {people.map((person) => <option key={person} value={person}>{person}</option>)}
+            </select>
+            <div className="digest-actions">
+              <button onClick={handleDigest} disabled={!digestPerson || digestLoading} className="board-primary-button">{digestLoading ? "Loading…" : "View digest →"}</button>
+              <button onClick={handleSendDigest} disabled={!digestPerson || digestSending} className="board-secondary-button">{digestSending ? "Sending…" : "Send digest"}</button>
+            </div>
+            {!people.length && <p className="digest-empty-note">People appear here when meetings produce owned action items.</p>}
         {digest && (
-          <div className="space-y-3 text-sm">
-            <p className="text-gray-400">Digest for <span className="text-white font-medium">{digest.person}</span></p>
-            <DigestSection label="Due this week" items={digest.due_this_week} />
+          <div className="digest-results">
+            <p className="digest-for">Digest for <strong>{digest.person}</strong></p>
+            <DigestSection label="Due this week" items={digest.due_this_week} color="due" />
             <DigestSection label="Overdue" items={digest.overdue} color="red" />
             <DigestSection label="Done" items={digest.done} color="green" />
-            {digest.relevant_decisions?.length > 0 && (
-              <div>
-                <p className="text-gray-500 mb-1">Relevant decisions:</p>
-                {digest.relevant_decisions.map((d) => (
-                  <p key={d.id} className="text-gray-300">• {d.statement}</p>
-                ))}
-              </div>
-            )}
-            <div className="text-xs">
-              <p className="text-gray-500 mb-1">Open conflicts affecting {digest.person} ({digest.open_conflicts}):</p>
-              {digest.open_conflict_items?.length ? digest.open_conflict_items.map((conflict) => (
-                <div key={conflict.id} className="text-amber-300 mb-1">
-                  • {conflict.explanation || `${conflict.type} conflict`}
-                  {conflict.old_decision && <span className="block text-gray-500 ml-3">Earlier: {conflict.old_decision}</span>}
-                  {conflict.new_decision && <span className="block text-gray-500 ml-3">Current: {conflict.new_decision}</span>}
-                </div>
-              )) : <p className="text-gray-600">None</p>}
-            </div>
+            {digest.relevant_decisions?.length > 0 && <div className="digest-detail"><p>Relevant decisions</p>{digest.relevant_decisions.map((d) => <div key={d.id}>{d.statement}</div>)}</div>}
+            <div className="digest-detail"><p>Open conflicts · {digest.open_conflicts}</p>{digest.open_conflict_items?.length ? digest.open_conflict_items.map((conflict) => <div className="digest-conflict" key={conflict.id}>{conflict.explanation || `${conflict.type} conflict`}</div>) : <span className="digest-muted">No open conflicts affecting {digest.person}.</span>}</div>
           </div>
         )}
+          </section>
+          <section className="board-quote-card"><BoardWave /><p>“The important part of a meeting is what happens next.”</p><span>VAANIमंथन · MEETING MEMORY</span></section>
+        </aside>
       </div>
 
       {/* Notifications */}
@@ -215,8 +219,14 @@ export default function BoardScreen({ onNewMeeting }) {
   );
 }
 
-function Metric({ label, value, icon }) {
-  return <div className="metric-card"><div className="flex items-start justify-between"><span className="metric-number">{value}</span><span className="metric-icon">{icon}</span></div><p className="metric-label">{label}</p></div>;
+function Metric({ label, value, icon, color }) {
+  return <div className={`metric-card board-metric metric-${color}`}><div className="flex items-start justify-between"><span className="metric-number">{value}</span><span className="metric-icon">{icon}</span></div><p className="metric-label">{label}</p></div>;
+}
+
+function formatDue(value) {
+  if (!value) return "No deadline";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
 }
 
 function BoardWave() {
@@ -232,12 +242,12 @@ function BoardWave() {
 
 function DigestSection({ label, items, color = "gray" }) {
   if (!items?.length) return null;
-  const colors = { red: "text-red-400", green: "text-green-400", gray: "text-gray-300" };
+  const colors = { due: "due", red: "red", green: "green", gray: "gray" };
   return (
-    <div>
-      <p className="text-gray-500 mb-1">{label} ({items.length}):</p>
+    <div className={`digest-group digest-${colors[color]}`}>
+      <p>{label}<b>{items.length}</b></p>
       {items.map((i) => (
-        <p key={i.id} className={`${colors[color]}`}>• {i.task} {i.due_date ? `(${i.due_date})` : ""}</p>
+        <div key={i.id}>{i.task} {i.due_date ? <small>{formatDue(i.due_date)}</small> : null}</div>
       ))}
     </div>
   );

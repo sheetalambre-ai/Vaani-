@@ -2,13 +2,19 @@ import React, { useState } from "react";
 import SpeakScreen from "./screens/SpeakScreen.jsx";
 import ReviewScreen from "./screens/ReviewScreen.jsx";
 import BoardScreen from "./screens/BoardScreen.jsx";
-import { loadDemoReview } from "./api.js";
+import { getReview } from "./api.js";
 
 export default function App() {
   const [screen, setScreen] = useState("speak"); // speak | review | board
   const [reviewData, setReviewData] = useState(null);
 
   const nav = (s) => setScreen(s);
+
+  async function openMeetingReview(meetingId) {
+    const review = await getReview(meetingId);
+    setReviewData(review);
+    setScreen("review");
+  }
 
   return (
     <div className="app-shell min-h-screen font-sans">
@@ -47,11 +53,11 @@ export default function App() {
         {screen === "review" && (
           <ReviewScreen
             data={reviewData}
-            onLoadDemo={async () => setReviewData(await loadDemoReview())}
+            onNewMeeting={() => setScreen("speak")}
             onPublished={() => setScreen("board")}
           />
         )}
-        {screen === "board" && <BoardScreen onNewMeeting={() => setScreen("speak")} />}
+        {screen === "board" && <BoardScreen onNewMeeting={() => setScreen("speak")} onOpenReview={openMeetingReview} />}
       </main>
       <footer className="app-footer"><span>Vaaniमंथन</span><span>Listen · Understand · Execute</span></footer>
     </div>

@@ -4,39 +4,24 @@ import {
   resolveConflict, publishMeeting, submitCorrection, getReview,
 } from "../api.js";
 
-export default function ReviewScreen({ data: initialData, onPublished, onLoadDemo }) {
+export default function ReviewScreen({ data: initialData, onPublished, onNewMeeting }) {
   const [data, setData] = useState(initialData);
   const [correction, setCorrection] = useState("");
   const [toast, setToast] = useState(null);
   const [publishing, setPublishing] = useState(false);
   const [editingItem, setEditingItem] = useState(null); // {id, task, owner, due_date}
-  const [demoLoading, setDemoLoading] = useState(false);
-  const [demoError, setDemoError] = useState("");
 
   useEffect(() => {
     if (initialData) setData(initialData);
   }, [initialData]);
 
-  async function handleLoadDemo() {
-    setDemoLoading(true);
-    setDemoError("");
-    try {
-      await onLoadDemo();
-    } catch (e) {
-      setDemoError(e.message || "Could not load the demo review");
-    } finally {
-      setDemoLoading(false);
-    }
-  }
-
   if (!data) {
     return (
       <div className="max-w-xl mx-auto text-center py-20 space-y-4">
-        <p className="text-gray-400">No meeting is open for review.</p>
-        <p className="text-sm text-gray-500">Load the seeded walkthrough to see decisions, conflicts, corrections, and action items without an API key.</p>
-        {demoError && <p role="alert" className="text-sm text-red-300">{demoError}</p>}
-        <button onClick={handleLoadDemo} disabled={demoLoading} className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium">
-          {demoLoading ? "Loading demo…" : "Open demo review"}
+        <p className="text-gray-700 font-medium">No meeting is open for review.</p>
+        <p className="text-sm text-gray-500">Process a meeting to review its decisions, conflicts, and action items here.</p>
+        <button onClick={onNewMeeting} className="px-4 py-2 rounded-full bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium">
+          Go to Speak →
         </button>
       </div>
     );

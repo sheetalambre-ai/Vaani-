@@ -24,10 +24,10 @@ async def reschedule_reminders(db: AsyncSession, item: models.ActionItem):
     await schedule_reminders(db, item)
 
 
-async def fire_due_reminders(db: AsyncSession, force: bool = False):
-    """Fire all reminders that are due (used by scheduler and simulate-time)."""
+async def fire_due_reminders(db: AsyncSession):
+    """Send reminders whose scheduled time has arrived."""
     now = datetime.utcnow()
-    reminders = await repository.get_unsent_reminders(db) if force else await repository.get_due_reminders(db, now)
+    reminders = await repository.get_due_reminders(db, now)
     fired = []
     for r in reminders:
         await _send_reminder(db, r)

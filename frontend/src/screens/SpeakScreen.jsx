@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { submitMeeting, getDemoDictation, loadDemoReview } from "../api.js";
+import { submitMeeting } from "../api.js";
 
 const TABS = ["dictate", "paste"];
 
@@ -8,35 +8,12 @@ export default function SpeakScreen({ onReview, onOpenReview }) {
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
   const [error, setError] = useState(null);
   const textareaRef = useRef(null);
 
   useEffect(() => {
     if (textareaRef.current) textareaRef.current.focus();
   }, [tab]);
-
-  async function loadDemo() {
-    try {
-      const data = await getDemoDictation();
-      setText(data.text);
-      setTab("dictate");
-    } catch (e) {
-      setError("Could not load demo dictation");
-    }
-  }
-
-  async function openDemoReview() {
-    setDemoLoading(true);
-    setError(null);
-    try {
-      onReview(await loadDemoReview());
-    } catch (e) {
-      setError(e.message || "Could not load the demo review");
-    } finally {
-      setDemoLoading(false);
-    }
-  }
 
   async function handleSubmit() {
     if (!text.trim()) return;
@@ -59,14 +36,6 @@ export default function SpeakScreen({ onReview, onOpenReview }) {
           <p className="screen-eyebrow">Voice intelligence interface</p>
           <h1 className="screen-title">Where conversations<br className="hidden sm:block" /> become action.</h1>
           <p className="screen-subtitle">Capture what was said. Leave with decisions, owners, and a clear next step.</p>
-        </div>
-        <div className="flex flex-wrap gap-2 pb-1">
-          <button onClick={loadDemo} className="px-4 py-2.5 rounded-full border border-violet-500 text-violet-400 hover:bg-violet-900/30 text-sm font-medium transition-colors">
-            Load demo dictation
-          </button>
-          <button onClick={openDemoReview} disabled={demoLoading} className="px-4 py-2.5 rounded-full bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-50 text-sm font-medium transition-colors">
-            {demoLoading ? "Loading…" : "Open ready demo ↗"}
-          </button>
         </div>
       </div>
 

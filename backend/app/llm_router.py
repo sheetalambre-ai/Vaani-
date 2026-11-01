@@ -4,6 +4,7 @@ import httpx
 from urllib.parse import urlsplit
 from typing import Any
 from app.config import settings
+from app.provider_http import provider_post
 
 
 class LLMError(Exception):
@@ -28,14 +29,13 @@ def _provider_error(response: httpx.Response, provider: str, secret: str = "") -
 async def _call_openai_compat(base_url: str, api_key: str, model: str, messages: list, extra_headers: dict = {}) -> str:
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", **extra_headers}
     payload = {"model": model, "messages": messages, "response_format": {"type": "json_object"}, "temperature": 0.1}
-    async with httpx.AsyncClient(timeout=20) as client:
-        resp = await client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
-        if resp.status_code == 429:
-            raise LLMError("rate_limited")
-        if not resp.is_success:
-            provider = urlsplit(base_url).hostname or "LLM provider"
-            raise _provider_error(resp, provider, api_key)
-        return resp.json()["choices"][0]["message"]["content"]
+    resp = await provider_post(f"{base_url}/chat/completions", json=payload, headers=headers)
+    if resp.status_code == 429:
+        raise LLMError("rate_limited")
+    if not resp.is_success:
+        provider = urlsplit(base_url).hostname or "LLM provider"
+        raise _provider_error(resp, provider, api_key)
+    return resp.json()["choices"][0]["message"]["content"]
 
 
 async def _call_gemini(messages: list, model: str) -> str:
@@ -56,14 +56,13 @@ async def _call_gemini(messages: list, model: str) -> str:
         payload["systemInstruction"] = {"parts": [{"text": system_text}]}
     model_path = model if model.startswith("models/") else f"models/{model}"
     url = f"https://generativelanguage.googleapis.com/v1beta/{model_path}:generateContent"
-    async with httpx.AsyncClient(timeout=20) as client:
-        resp = await client.post(url, json=payload, headers={"x-goog-api-key": settings.GEMINI_API_KEY})
-        if resp.status_code == 429:
-            raise LLMError("rate_limited")
-        if not resp.is_success:
-            raise _provider_error(resp, "Gemini", settings.GEMINI_API_KEY)
-        data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+    resp = await provider_post(url, json=payload, headers={"x-goog-api-key": settings.GEMINI_API_KEY})
+    if resp.status_code == 429:
+        raise LLMError("rate_limited")
+    if not resp.is_success:
+        raise _provider_error(resp, "Gemini", settings.GEMINI_API_KEY)
+    data = resp.json()
+    return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
 async def chat_json(messages: list[dict], retries: int = 2) -> Any:

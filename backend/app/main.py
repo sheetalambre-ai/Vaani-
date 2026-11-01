@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
@@ -9,8 +10,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import os
 
 from app.database import init_db, get_db
-from app.seed import seed_if_empty, seed_demo_review, DEMO_DICTATION
-from app import repository
+from app.provider_http import provider_http_session
+from app.seed import purge_known_demo_data
+from app import models, repository
 from app.pipeline import process_meeting, build_review_payload
 from app.agents import correction_agent, executor_agent, reminder_agent, digest_agent
 
@@ -28,7 +30,7 @@ async def lifespan(_: FastAPI):
     await init_db()
     from app.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
-        await seed_if_empty(db)
+        await purge_known_demo_data(db)
     if not os.getenv("VERCEL"):
         scheduler.add_job(_scheduled_reminders, "interval", minutes=1, id="reminders", replace_existing=True)
         scheduler.start()
@@ -89,7 +91,8 @@ class ConflictResolve(BaseModel):
 async def create_meeting(body: MeetingCreate, db: AsyncSession = Depends(get_db)):
     held_at = datetime.fromisoformat(body.held_at) if body.held_at else datetime.utcnow()
     try:
-        payload = await process_meeting(db, raw_input=body.text, title=body.title, held_at=held_at)
+        async with provider_http_session():
+            payload = await process_meeting(db, raw_input=body.text, title=body.title, held_at=held_at)
         return payload
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -119,6 +122,17 @@ async def reject_item(item_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Item not found")
     await repository.update_action_item(db, item_id, {"status": "rejected"})
     return {"id": item_id, "status": "rejected"}
+
+
+@app.post("/items/{item_id}/complete")
+async def complete_item(item_id: int, db: AsyncSession = Depends(get_db)):
+    item = await repository.get_action_item(db, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.status != "created":
+        raise HTTPException(status_code=400, detail="Only tracker-created items can be marked complete")
+    await repository.update_action_item(db, item_id, {"status": "done"})
+    return {"id": item_id, "status": "done"}
 
 
 @app.patch("/items/{item_id}")
@@ -242,12 +256,17 @@ async def publish_meeting(meeting_id: int, db: AsyncSession = Depends(get_db)):
 
 @app.get("/board")
 async def get_board(db: AsyncSession = Depends(get_db)):
-    items = await repository.get_all_action_items(db)
+    rows = await db.execute(
+        select(models.ActionItem, models.Meeting.title)
+        .join(models.Meeting, models.Meeting.id == models.ActionItem.meeting_id)
+        .order_by(models.ActionItem.due_date.asc().nullslast(), models.ActionItem.id.desc())
+    )
     board = {}
-    for item in items:
+    for item, meeting_title in rows.all():
         board.setdefault(item.status, []).append({
             "id": item.id, "task": item.task, "owner": item.owner,
             "due_date": item.due_date, "status": item.status, "external_ref": item.external_ref,
+            "meeting_id": item.meeting_id, "meeting_title": meeting_title,
         })
     return board
 
@@ -273,12 +292,6 @@ async def send_digest(person: str, db: AsyncSession = Depends(get_db)):
     return {"sent": True, "digest": digest}
 
 
-@app.post("/debug/simulate-time")
-async def simulate_time(db: AsyncSession = Depends(get_db)):
-    fired = await reminder_agent.fire_due_reminders(db, force=True)
-    return {"fired_reminder_ids": fired}
-
-
 @app.get("/notifications")
 async def get_notifications(db: AsyncSession = Depends(get_db)):
     notes = await repository.get_notifications(db)
@@ -294,14 +307,3 @@ async def run_reminder_cron(request: Request, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=401, detail="Unauthorized")
     fired = await reminder_agent.fire_due_reminders(db)
     return {"fired_reminder_ids": fired}
-
-
-@app.get("/demo-dictation")
-async def get_demo_dictation():
-    return {"text": DEMO_DICTATION}
-
-
-@app.post("/demo/review")
-async def load_demo_review(db: AsyncSession = Depends(get_db)):
-    meeting = await seed_demo_review(db)
-    return await build_review_payload(db, meeting.id)

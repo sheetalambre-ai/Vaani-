@@ -1,5 +1,7 @@
 """DigestAgent: builds weekly per-person digests."""
 from datetime import datetime, timedelta
+from sqlalchemy import select, func, or_
+from sqlalchemy.orm import aliased
 from sqlalchemy.ext.asyncio import AsyncSession
 from app import models, repository
 
@@ -8,8 +10,10 @@ async def build_digest(db: AsyncSession, person_name: str) -> dict:
     now = datetime.utcnow()
     week_end = now + timedelta(days=7)
 
-    all_items = await repository.get_all_action_items(db)
-    person_items = [a for a in all_items if a.owner and a.owner.lower() == person_name.lower()]
+    item_rows = await db.execute(
+        select(models.ActionItem).where(func.lower(models.ActionItem.owner) == person_name.lower())
+    )
+    person_items = list(item_rows.scalars().all())
 
     due_this_week, overdue, done = [], [], []
     for item in person_items:
@@ -29,21 +33,28 @@ async def build_digest(db: AsyncSession, person_name: str) -> dict:
 
     # Include decisions from meetings where the person owns work, plus decisions
     # that directly name them or identify them as the decision maker.
-    all_decisions = await repository.get_all_decisions(db)
-    relevant_decisions = [
-        decision for decision in all_decisions
-        if decision.meeting_id in assigned_meeting_ids
-        or person_name.casefold() in (decision.statement or "").casefold()
-        or person_name.casefold() in (decision.decided_by or "").casefold()
+    decision_filters = [
+        models.Decision.statement.ilike(f"%{person_name}%"),
+        models.Decision.decided_by.ilike(f"%{person_name}%"),
     ]
+    if assigned_meeting_ids:
+        decision_filters.append(models.Decision.meeting_id.in_(assigned_meeting_ids))
+    decision_rows = await db.execute(select(models.Decision).where(or_(*decision_filters)))
+    relevant_decisions = list(decision_rows.scalars().all())
 
     # A conflict affects a person if it touches one of their assigned meetings
     # or either decision explicitly names them.
     open_conflict_items = []
-    for conflict in await repository.get_open_conflicts(db):
-        new_decision = await repository.get_decision(db, conflict.new_decision_id)
-        old_decision = await repository.get_decision(db, conflict.old_decision_id)
-        decisions = [d for d in (new_decision, old_decision) if d]
+    new_decision = aliased(models.Decision)
+    old_decision = aliased(models.Decision)
+    conflict_rows = await db.execute(
+        select(models.Conflict, new_decision, old_decision)
+        .join(new_decision, models.Conflict.new_decision_id == new_decision.id)
+        .join(old_decision, models.Conflict.old_decision_id == old_decision.id)
+        .where(models.Conflict.resolution == "open")
+    )
+    for conflict, new_item, old_item in conflict_rows.all():
+        decisions = [new_item, old_item]
         affects_person = any(
             d.meeting_id in assigned_meeting_ids
             or person_name.casefold() in (d.statement or "").casefold()
@@ -56,8 +67,8 @@ async def build_digest(db: AsyncSession, person_name: str) -> dict:
                 "type": conflict.type,
                 "severity": conflict.severity,
                 "explanation": conflict.explanation,
-                "new_decision": new_decision.statement if new_decision else None,
-                "old_decision": old_decision.statement if old_decision else None,
+                "new_decision": new_item.statement,
+                "old_decision": old_item.statement,
             })
 
     return {

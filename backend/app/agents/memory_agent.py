@@ -4,6 +4,7 @@ import math
 import re
 from app.config import settings
 from app import models
+from app.provider_http import provider_post
 
 _TOKEN = re.compile(r"(?u)\b\w\w+\b")
 
@@ -35,20 +36,19 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
         ]
     }
     try:
-        import httpx
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                url,
-                json=payload,
-                headers={"x-goog-api-key": settings.GEMINI_API_KEY},
-            )
-            response.raise_for_status()
-            embeddings = response.json()["embeddings"]
-            if len(embeddings) != len(texts):
-                raise ValueError("Gemini returned an incomplete embedding batch")
-            vectors = [item["values"] for item in embeddings]
-            print(f"Gemini embeddings succeeded: model={model_path}, count={len(vectors)}, dimensions={len(vectors[0]) if vectors else 0}")
-            return vectors
+        response = await provider_post(
+            url,
+            timeout=30,
+            json=payload,
+            headers={"x-goog-api-key": settings.GEMINI_API_KEY},
+        )
+        response.raise_for_status()
+        embeddings = response.json()["embeddings"]
+        if len(embeddings) != len(texts):
+            raise ValueError("Gemini returned an incomplete embedding batch")
+        vectors = [item["values"] for item in embeddings]
+        print(f"Gemini embeddings succeeded: model={model_path}, count={len(vectors)}, dimensions={len(vectors[0]) if vectors else 0}")
+        return vectors
     except Exception:
         # A retired/unavailable model or invalid credentials cannot be fixed by
         # retrying the same request once per decision; use the existing local

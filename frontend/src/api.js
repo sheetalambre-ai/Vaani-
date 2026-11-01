@@ -35,6 +35,10 @@ export async function rejectItem(itemId) {
   return request(`/items/${itemId}/reject`, { method: "POST" });
 }
 
+export async function completeItem(itemId) {
+  return request(`/items/${itemId}/complete`, { method: "POST" });
+}
+
 export async function patchItem(itemId, data) {
   return request(`/items/${itemId}`, {
     method: "PATCH",
@@ -75,18 +79,6 @@ export async function sendDigest(person) {
   return request(`/digest/${encodeURIComponent(person)}/send`, { method: "POST" });
 }
 
-export async function simulateTime() {
-  return request("/debug/simulate-time", { method: "POST" });
-}
-
 export async function getNotifications() {
   return request("/notifications");
-}
-
-export async function getDemoDictation() {
-  return request("/demo-dictation");
-}
-
-export async function loadDemoReview() {
-  return request("/demo/review", { method: "POST" });
 }
