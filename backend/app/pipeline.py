@@ -1,4 +1,5 @@
 """Orchestrates the meeting ingestion pipeline."""
+import asyncio
 from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,10 +29,15 @@ async def process_meeting(db: AsyncSession, raw_input: str, title: str = None, h
 
     # 2. Compare against a single snapshot of cross-meeting memory. Gemini's
     # batch endpoint embeds every new decision with one network round trip.
-    new_embeddings = await memory_agent.embed_texts(
-        [decision.statement for decision in extraction.decisions]
+    # Embedding and reading prior decisions are independent. Overlap the
+    # provider round trip with the DB query so the request pays only for the
+    # slower of the two instead of their combined latency.
+    new_embeddings, past_decisions = await asyncio.gather(
+        memory_agent.embed_texts(
+            [decision.statement for decision in extraction.decisions]
+        ),
+        repository.get_all_active_decisions(db),
     )
-    past_decisions = await repository.get_all_active_decisions(db)
     past_decisions = [item for item in past_decisions if item.meeting_id != meeting.id]
 
     decisions = []
