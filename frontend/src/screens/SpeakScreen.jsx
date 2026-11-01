@@ -45,7 +45,7 @@ export default function SpeakScreen({ onReview, onOpenReview }) {
 
   function focusWisprField() {
     textareaRef.current?.focus();
-    setCaptureStatus("Transcript field focused. Use your configured Wispr Flow shortcut to dictate; the words will appear here.");
+    setCaptureStatus("Field ready. Tap Caps Lock twice, then speak.");
   }
 
   async function handleTranscriptFile(event) {
@@ -78,7 +78,6 @@ export default function SpeakScreen({ onReview, onOpenReview }) {
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
-  const currentMode = MODES.find((option) => option.id === mode);
   const labelsPresent = hasSpeakerLabels(text);
 
   return (
@@ -89,6 +88,7 @@ export default function SpeakScreen({ onReview, onOpenReview }) {
           <h1 className="screen-title">From conversation to clear action.</h1>
           <p className="screen-subtitle">Start with Wispr Flow, add the conversation, then review what Vaani finds.</p>
         </div>
+        <div className="capture-audio-art" aria-hidden="true"><VoiceStrings /></div>
         <button type="button" className="board-secondary-button sample-load-button" onClick={loadSample}>Try a sample transcript</button>
       </header>
 
@@ -132,13 +132,13 @@ export default function SpeakScreen({ onReview, onOpenReview }) {
 
           {mode === "wispr" && (
             <div className="wispr-live-card">
-              <div className="wispr-live-heading"><span className="wispr-mic-icon" aria-hidden="true">♩</span><div><b>Wispr Flow dictation</b><p>Focus this field, then dictate with the Wispr Flow shortcut on your computer.</p></div><span className="live-state"><i /> READY</span></div>
+              <div className="wispr-live-heading"><span className="wispr-mic-icon" aria-hidden="true">♩</span><div><b>Wispr Flow dictation</b><p>Focus the text box, then speak naturally.</p></div><span className="live-state"><i /> READY</span></div>
               <div className="wispr-steps">
-                <p><span>1</span> Click <b>Focus field for Wispr</b> below.</p>
-                <p><span>2</span> On Windows, use the default <b>Ctrl+Win</b> push-to-talk shortcut (hold while speaking). Hands-free defaults to <b>Ctrl+Win+Space</b>.</p>
-                <p><span>3</span> Release the shortcut. Wispr Flow inserts your words into the field; say speaker names aloud for attribution.</p>
+                <p><span>1</span> Click <b>Focus field for Wispr</b>.</p>
+                <p><span>2</span> On Windows, tap <b>Caps Lock twice</b> to dictate.</p>
+                <p><span>3</span> Speak, then review the words here. Say names to label speakers.</p>
               </div>
-              <p className="wispr-integration-note">Vaani does not open Wispr or request browser microphone access. Wispr Flow handles dictation; Vaani analyzes the text inserted here.</p>
+              <p className="wispr-integration-note">Wispr types your speech here. Vaani turns it into decisions and tasks.</p>
             </div>
           )}
 
@@ -193,4 +193,16 @@ export default function SpeakScreen({ onReview, onOpenReview }) {
 
 function hasSpeakerLabels(value) {
   return value.split(/\r?\n/).some((line) => /^[^:\n]{1,30}:\s+\S/.test(line.trim()));
+}
+
+function VoiceStrings() {
+  return (
+    <svg viewBox="0 0 600 180" preserveAspectRatio="none">
+      <defs><linearGradient id="vaani-string-gradient" x1="0" x2="1"><stop offset="0" stopColor="#eac9ae" /><stop offset=".48" stopColor="#8c70c2" /><stop offset="1" stopColor="#e6c4a9" /></linearGradient></defs>
+      <path d="M0 91 C70 88 88 48 150 71 S230 139 300 91 390 35 455 68 525 130 600 82" />
+      <path d="M0 104 C70 101 96 70 155 84 S230 124 300 101 390 62 455 84 530 119 600 96" />
+      <path d="M0 78 C70 82 100 116 158 101 S232 57 301 80 390 126 457 105 531 69 600 88" />
+      <path d="M0 93 C76 94 101 59 158 75 S233 132 302 94 390 47 458 75 530 126 600 91" />
+    </svg>
+  );
 }
