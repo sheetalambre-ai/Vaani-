@@ -7,6 +7,7 @@ import {
 export default function ReviewScreen({ data: initialData, onPublished, onNewMeeting }) {
   const [data, setData] = useState(initialData);
   const [correction, setCorrection] = useState("");
+  const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
   const [publishing, setPublishing] = useState(false);
   const [editingItem, setEditingItem] = useState(null); // {id, task, owner, due_date}
@@ -80,7 +81,8 @@ export default function ReviewScreen({ data: initialData, onPublished, onNewMeet
   }
 
   async function handleCorrection() {
-    if (!correction.trim()) return;
+    if (!correction.trim() || correctionSubmitting) return;
+    setCorrectionSubmitting(true);
     try {
       const result = await submitCorrection(data.meeting_id, correction);
       setCorrection("");
@@ -89,6 +91,8 @@ export default function ReviewScreen({ data: initialData, onPublished, onNewMeet
       showToast(`Changed ${patch.field}: "${result.old_value}" → "${result.new_value}"`);
     } catch (e) {
       showToast(e.message, "error");
+    } finally {
+      setCorrectionSubmitting(false);
     }
   }
 
@@ -142,20 +146,25 @@ export default function ReviewScreen({ data: initialData, onPublished, onNewMeet
       </div>
 
       {/* Voice correction */}
-      <div className="review-correction flex gap-2 bg-gray-900 border border-gray-700 rounded-xl p-3">
-        <input
-          value={correction}
-          onChange={(e) => setCorrection(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleCorrection()}
-          placeholder='Voice correction: "make that Friday" or "Rahul owns the API task"'
-          className="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-600 focus:outline-none"
-        />
-        <button
-          onClick={handleCorrection}
-          className="px-3 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm"
-        >
-          Apply
-        </button>
+      <div className="review-correction bg-gray-900 border border-gray-700 rounded-xl">
+        <div className="correction-heading"><strong>Voice correction</strong><p>Apply updates one extracted task or decision and records the change. The original transcript stays unchanged.</p></div>
+        <div className="correction-control">
+          <input
+            value={correction}
+            onChange={(e) => setCorrection(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleCorrection()}
+            placeholder='For example: "move the pricing page deadline to Friday"'
+            className="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-600 focus:outline-none"
+            aria-label="Describe a correction to an extracted task or decision"
+          />
+          <button
+            onClick={handleCorrection}
+            disabled={!correction.trim() || correctionSubmitting}
+            className="px-3 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm"
+          >
+            {correctionSubmitting ? "Applying…" : "Apply correction"}
+          </button>
+        </div>
       </div>
 
       {/* Raw vs Cleaned */}

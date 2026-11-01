@@ -14,7 +14,7 @@ from app.provider_http import provider_http_session
 from app.seed import purge_known_demo_data
 from app import models, repository
 from app.pipeline import process_meeting, build_review_payload
-from app.agents import correction_agent, executor_agent, reminder_agent, digest_agent
+from app.agents import correction_agent, executor_agent, reminder_agent, digest_agent, memory_agent
 
 scheduler = AsyncIOScheduler(timezone="UTC")
 
@@ -192,11 +192,15 @@ async def correct_meeting(meeting_id: int, body: CorrectionCreate, db: AsyncSess
         elif patch.target_type == "decision":
             if patch.field not in {"statement", "rationale"}:
                 raise HTTPException(status_code=422, detail="Unsupported decision field")
-            decision = await repository.get_decision(patch.target_id)
+            decision = await repository.get_decision(db, patch.target_id)
             if decision and decision.meeting_id == meeting_id:
                 target_found = True
                 old_value = getattr(decision, patch.field, None)
-                await repository.update_decision(db, patch.target_id, {patch.field: patch.new_value})
+                updates = {patch.field: patch.new_value}
+                if patch.field == "statement":
+                    embeddings = await memory_agent.embed_texts([patch.new_value])
+                    updates["embedding"] = embeddings[0] if embeddings else []
+                await repository.update_decision(db, patch.target_id, updates)
 
     if not target_found:
         raise HTTPException(status_code=422, detail="Could not confidently match that correction to an item")

@@ -90,13 +90,36 @@ export default function SpeakScreen({ onReview, onOpenReview }) {
               ))}
             </div>
 
+            <p className="capture-hint">
+              {tab === "dictate"
+                ? "Wispr Flow types your voice into this focused field. For multiple speakers, say each name or paste a speaker-labelled transcript."
+                : "Paste a meeting transcript with one speaker per line. Wispr Notetaker transcripts can be copied here with their speaker labels."}
+            </p>
+
             <textarea
               ref={textareaRef}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder={tab === "dictate" ? "Press your Wispr Flow hotkey and talk through the meeting…" : "Paste a speaker-labelled transcript here, e.g.\nPriya: We should launch at $49/month.\nRahul: Agreed, let's do it."}
+              placeholder={tab === "dictate" ? "Click here, then dictate your notes with Wispr Flow…" : "Paste a speaker-labelled transcript here, e.g.\nSpeaker 1: We should launch at $49/month.\nSpeaker 2: Agreed, let's launch in November."}
               className="mt-3 w-full min-h-[142px] flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-violet-500 resize-y leading-relaxed"
             />
+
+            <details className="wispr-guide">
+              <summary><span>♩ Wispr Flow · quick guide</span><span>How to capture a meeting</span></summary>
+              <div className="wispr-guide-body">
+                <div><b>1 · Dictate into Vaani</b><p>Click the transcript box, then use your Wispr Flow shortcut. On Windows the defaults are Ctrl+Win (push to talk) and Ctrl+Win+Space (hands-free); shortcuts can be changed in Wispr settings.</p></div>
+                <div><b>2 · Preserve speaker names</b><p>Flow dictation captures the speaker using the microphone. For a group transcript, use Wispr Notetaker’s speaker-labelled transcript or your meeting app’s transcript, then paste it above. When dictating manually, say each speaker’s name before their turn.</p></div>
+                <div><b>3 · Check, then process</b><p>Review names, dates, and amounts before processing. Vaani extracts decisions and tasks, checks earlier meeting decisions for conflicts, and keeps items private until you approve publishing.</p></div>
+                <div className="wispr-links"><a href="https://docs.wisprflow.ai/articles/6409258247-flow-bubble-requirements" target="_blank" rel="noreferrer">Wispr Flow dictation guide ↗</a><a href="https://docs.wisprflow.ai/articles/4091106439-The-live-transcript-in-Notetaker" target="_blank" rel="noreferrer">Speaker-labelled Notetaker transcripts ↗</a></div>
+                <p className="wispr-note">Wispr Flow is the voice-to-text layer; Vaani receives the text inserted here. There is no direct Wispr API connection or automatic meeting-audio capture.</p>
+              </div>
+            </details>
+
+            <div className="capture-next-steps" aria-label="What Vaani does after capture">
+              <span><b>Review</b> Confirm decisions, owners, dates, and conflicts.</span>
+              <span><b>Approve</b> Choose what can be posted to your tracker.</span>
+              <span><b>Follow up</b> Get reminders and a weekly digest per person.</span>
+            </div>
 
             {error && <div role="alert" className="mt-3 bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">{error}</div>}
 

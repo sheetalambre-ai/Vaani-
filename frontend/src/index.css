@@ -464,3 +464,53 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 3px solid
   .digest-actions { flex-direction: column; }
 }
 @media (prefers-reduced-motion: reduce) { .board-audio-banner::after { animation: none; } }
+
+/* Clear capture guidance for Wispr Flow and pasted speaker-labelled transcripts. */
+.capture-hint { margin-top: 9px; color: #6f6877; font-size: 11px; line-height: 1.5; }
+.wispr-guide { margin-top: 12px; overflow: hidden; border: 1px solid #e7deed; border-radius: 13px; background: linear-gradient(115deg,rgba(242,236,250,.68),rgba(255,253,251,.84)); }
+.wispr-guide summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; cursor: pointer; list-style: none; color: #514274; font-size: 12px; font-weight: 750; }
+.wispr-guide summary::-webkit-details-marker { display: none; }
+.wispr-guide summary::after { content: "+"; color: var(--purple); font-size: 17px; }
+.wispr-guide[open] summary::after { content: "−"; }
+.wispr-guide summary span:last-child { margin-left: auto; color: #82798c; font-size: 10px; font-weight: 550; text-align: right; }
+.wispr-guide-body { display: grid; gap: 9px; padding: 0 14px 13px; color: #5f5868; font-size: 11px; line-height: 1.5; }
+.wispr-guide-body b { color: #302a3a; font-size: 11px; }
+.wispr-guide-body p { margin-top: 2px; }
+.wispr-links { display: flex; flex-wrap: wrap; gap: 8px 15px; padding-top: 2px; }
+.wispr-links a { color: #5e4a91; font-size: 10px; font-weight: 700; text-decoration: underline; text-decoration-color: #c8b9dc; text-underline-offset: 3px; }
+.wispr-note { padding-top: 8px; border-top: 1px solid #e8e0ea; color: #827a88; font-size: 10px; }
+.capture-next-steps { display: grid; gap: 6px; margin-top: 12px; padding: 10px 12px; border-left: 2px solid #ab98d1; color: #716a79; font-size: 10px; line-height: 1.45; }
+.capture-next-steps b { display: inline-block; min-width: 62px; color: #514274; font-size: 10px; }
+
+/* The Apply control edits extracted fields and leaves the source transcript intact. */
+.review-correction { display: grid; gap: 9px; min-height: 0; padding: 14px 16px; border-color: #ddd4e8 !important; background: linear-gradient(110deg,#f6f1fb,#fffdfa) !important; box-shadow: 0 5px 18px rgba(61,43,76,.04); }
+.review-correction::before { display: none; }
+.correction-heading strong { color: #44365e; font-size: 13px; font-weight: 800; }
+.correction-heading p { margin-top: 3px; color: #756e7d; font-size: 11px; line-height: 1.5; }
+.correction-control { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.review-correction input { min-width: 0; min-height: 38px; padding: 0 3px; background: transparent !important; border: 0 !important; box-shadow: none !important; }
+.review-correction button { flex: 0 0 auto; min-width: 124px; min-height: 38px; border-radius: 10px; background: #554078 !important; color: #fff !important; font-size: 12px; font-weight: 700; }
+.review-correction button:disabled { cursor: not-allowed; opacity: .48; }
+
+:root[data-theme="dark"] .capture-hint { color: #c2b9ca; }
+:root[data-theme="dark"] .wispr-guide { border-color: #4b425b; background: linear-gradient(115deg,#30283d,#26222f); }
+:root[data-theme="dark"] .wispr-guide summary,
+:root[data-theme="dark"] .wispr-guide-body b,
+:root[data-theme="dark"] .capture-next-steps b,
+:root[data-theme="dark"] .correction-heading strong { color: #e5d9f7; }
+:root[data-theme="dark"] .wispr-guide summary span:last-child,
+:root[data-theme="dark"] .wispr-guide-body,
+:root[data-theme="dark"] .wispr-note,
+:root[data-theme="dark"] .correction-heading p,
+:root[data-theme="dark"] .capture-next-steps { color: #beb5c8; }
+:root[data-theme="dark"] .wispr-links a { color: #ccb7f0; }
+:root[data-theme="dark"] .wispr-note { border-color: #494154; }
+:root[data-theme="dark"] .review-correction { border-color: #4c425a !important; background: linear-gradient(110deg,#30283d,#27232f) !important; }
+:root[data-theme="dark"] .review-correction input { color: #f4f0f8 !important; }
+
+@media (max-width: 600px) {
+  .wispr-guide summary { align-items: flex-start; flex-wrap: wrap; }
+  .wispr-guide summary span:last-child { margin-left: 0; text-align: left; }
+  .correction-control { align-items: stretch; flex-direction: column; }
+  .review-correction button { width: 100%; }
+}

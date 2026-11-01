@@ -4,13 +4,14 @@ from sqlalchemy import select
 
 from app import repository
 from app.agents import conflict_agent, memory_agent
-from app.main import publish_meeting
+from app.main import publish_meeting, correct_meeting, CorrectionCreate
 from app.agents.extraction_agent import ActionItemExtract, DecisionExtract, ExtractionResult
-from app.models import ActionItem, Conflict, Decision, Meeting, Reminder, Utterance
+from app.models import ActionItem, Conflict, Correction, Decision, Meeting, Reminder, Utterance
 from app.seed import purge_known_demo_data
 from datetime import datetime, timedelta
 from app.agents.digest_agent import build_digest
 from app.pipeline import build_review_payload
+from app.agents.correction_agent import CorrectionPatch
 
 
 def test_extraction_schema_validity():
@@ -157,3 +158,68 @@ async def test_weekly_digest_keeps_tasks_and_conflicts(db_session):
         "Asha will ship onboarding on Nov 20",
         "Onboarding was planned for December",
     }
+
+
+@pytest.mark.asyncio
+async def test_apply_voice_correction_updates_item_and_records_audit(db_session, monkeypatch):
+    meeting = Meeting(title="Sprint review", held_at=datetime.utcnow(), raw_input="We will finish the API.")
+    db_session.add(meeting)
+    await db_session.flush()
+    task = ActionItem(meeting_id=meeting.id, task="Finish the API", owner="Sam", status="pending_review")
+    db_session.add(task)
+    await db_session.flush()
+
+    async def interpret(*_args, **_kwargs):
+        return CorrectionPatch(
+            target_type="action_item", target_id=task.id, field="owner",
+            new_value="Mina", confidence="high",
+        )
+
+    monkeypatch.setattr("app.main.correction_agent.parse_correction", interpret)
+    result = await correct_meeting(
+        meeting.id,
+        CorrectionCreate(spoken_text="Mina owns the API task"),
+        db_session,
+    )
+
+    await db_session.refresh(task)
+    audit = (await db_session.execute(select(Correction))).scalars().one()
+    assert task.owner == "Mina"
+    assert result["old_value"] == "Sam"
+    assert result["new_value"] == "Mina"
+    assert audit.field == "owner"
+    assert audit.old_value == "Sam"
+    assert audit.new_value == "Mina"
+    assert audit.spoken_text == "Mina owns the API task"
+
+
+@pytest.mark.asyncio
+async def test_apply_decision_correction_refreshes_memory_embedding(db_session, monkeypatch):
+    meeting = Meeting(title="Decision review", held_at=datetime.utcnow(), raw_input="Launch in October.")
+    db_session.add(meeting)
+    await db_session.flush()
+    decision = Decision(meeting_id=meeting.id, statement="Launch in October", embedding=[0.1, 0.2])
+    db_session.add(decision)
+    await db_session.flush()
+
+    async def interpret(*_args, **_kwargs):
+        return CorrectionPatch(
+            target_type="decision", target_id=decision.id, field="statement",
+            new_value="Launch in November", confidence="high",
+        )
+
+    async def embed(texts):
+        assert texts == ["Launch in November"]
+        return [[0.3, 0.4]]
+
+    monkeypatch.setattr("app.main.correction_agent.parse_correction", interpret)
+    monkeypatch.setattr("app.main.memory_agent.embed_texts", embed)
+    await correct_meeting(
+        meeting.id,
+        CorrectionCreate(spoken_text="Move the launch to November"),
+        db_session,
+    )
+
+    await db_session.refresh(decision)
+    assert decision.statement == "Launch in November"
+    assert decision.embedding == [0.3, 0.4]
