@@ -21,7 +21,11 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     if not settings.GEMINI_API_KEY or not settings.GEMINI_EMBED_MODEL:
         return [[] for _ in texts]
 
-    model = settings.GEMINI_EMBED_MODEL
+    model = settings.GEMINI_EMBED_MODEL or "gemini-embedding-001"
+    # Keep old Vercel environment values working: text-embedding-004 now
+    # returns 404, so route that legacy name to Google's current stable model.
+    if model.removeprefix("models/") == "text-embedding-004":
+        model = "gemini-embedding-001"
     model_path = model if model.startswith("models/") else f"models/{model}"
     url = f"https://generativelanguage.googleapis.com/v1beta/{model_path}:batchEmbedContents"
     payload = {
@@ -42,7 +46,9 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
             embeddings = response.json()["embeddings"]
             if len(embeddings) != len(texts):
                 raise ValueError("Gemini returned an incomplete embedding batch")
-            return [item["values"] for item in embeddings]
+            vectors = [item["values"] for item in embeddings]
+            print(f"Gemini embeddings succeeded: model={model_path}, count={len(vectors)}, dimensions={len(vectors[0]) if vectors else 0}")
+            return vectors
     except Exception:
         # A retired/unavailable model or invalid credentials cannot be fixed by
         # retrying the same request once per decision; use the existing local
@@ -101,7 +107,10 @@ def retrieve_similar(
     if not past_decisions:
         return []
 
-    use_gemini = bool(new_embedding) and all(d.embedding for d in past_decisions)
+    use_gemini = (
+        bool(new_embedding)
+        and all(d.embedding and len(d.embedding) == len(new_embedding) for d in past_decisions)
+    )
 
     if use_gemini:
         scored = []

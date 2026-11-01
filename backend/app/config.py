@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: Optional[str] = None
-    GEMINI_EMBED_MODEL: Optional[str] = None
+    GEMINI_EMBED_MODEL: Optional[str] = "gemini-embedding-001"
 
     OPENROUTER_API_KEY: Optional[str] = None
     OPENROUTER_MODEL: Optional[str] = None
