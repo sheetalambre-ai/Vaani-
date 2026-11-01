@@ -1,8 +1,11 @@
 """MemoryAgent: embeds decisions and retrieves top-N similar past decisions."""
-import numpy as np
-from typing import Optional
+from collections import Counter
+import math
+import re
 from app.config import settings
 from app import models
+
+_TOKEN = re.compile(r"(?u)\b\w\w+\b")
 
 
 async def embed_text(text: str) -> list[float]:
@@ -26,28 +29,43 @@ async def _gemini_embed(text: str) -> list[float]:
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
-    va, vb = np.array(a), np.array(b)
-    denom = np.linalg.norm(va) * np.linalg.norm(vb)
-    if denom == 0:
+    """Cosine similarity without loading a numerical-computing runtime."""
+    if not a or len(a) != len(b):
         return 0.0
-    return float(np.dot(va, vb) / denom)
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(y * y for y in b))
+    return dot / (norm_a * norm_b) if norm_a and norm_b else 0.0
 
 
 def _tfidf_cosine(query: str, candidates: list[str]) -> list[float]:
-    from sklearn.feature_extraction.text import TfidfVectorizer
+    """Small-corpus TF-IDF cosine fallback implemented with the standard library."""
     if not candidates:
         return []
-    docs = [query] + candidates
-    try:
-        vec = TfidfVectorizer().fit_transform(docs)
-    except ValueError:
+
+    docs = [_TOKEN.findall(text.lower()) for text in [query, *candidates]]
+    document_frequency = Counter(token for doc in docs for token in set(doc))
+    if not document_frequency:
         return [0.0] * len(candidates)
-    arr = vec.toarray()
-    query_vec = arr[0]
+
+    doc_count = len(docs)
+    idf = {
+        token: math.log((1 + doc_count) / (1 + count)) + 1
+        for token, count in document_frequency.items()
+    }
+
+    def weighted_vector(tokens: list[str]) -> dict[str, float]:
+        counts = Counter(tokens)
+        return {token: frequency * idf[token] for token, frequency in counts.items()}
+
+    vectors = [weighted_vector(doc) for doc in docs]
+    query_vector = vectors[0]
+    query_norm = math.sqrt(sum(value * value for value in query_vector.values()))
     scores = []
-    for i in range(1, len(arr)):
-        denom = np.linalg.norm(query_vec) * np.linalg.norm(arr[i])
-        scores.append(float(np.dot(query_vec, arr[i]) / denom) if denom else 0.0)
+    for vector in vectors[1:]:
+        norm = math.sqrt(sum(value * value for value in vector.values()))
+        dot = sum(value * vector.get(token, 0.0) for token, value in query_vector.items())
+        scores.append(dot / (query_norm * norm) if query_norm and norm else 0.0)
     return scores
 
 
@@ -71,9 +89,8 @@ def retrieve_similar(
                 scored.append((score, d))
         scored.sort(key=lambda x: x[0], reverse=True)
         return [d for _, d in scored[:top_n]]
-    else:
-        # TF-IDF fallback
-        statements = [d.statement for d in past_decisions]
-        scores = _tfidf_cosine(new_statement, statements)
-        paired = sorted(zip(scores, past_decisions), key=lambda x: x[0], reverse=True)
-        return [d for _, d in paired[:top_n]]
+
+    statements = [d.statement for d in past_decisions]
+    scores = _tfidf_cosine(new_statement, statements)
+    paired = sorted(zip(scores, past_decisions), key=lambda x: x[0], reverse=True)
+    return [d for _, d in paired[:top_n]]
