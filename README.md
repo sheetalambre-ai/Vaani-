@@ -63,7 +63,7 @@ From the project root in PowerShell:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r backend\requirements.txt
+python -m pip install -r backend\requirements-dev.txt
 Copy-Item .env.example .env
 ```
 
