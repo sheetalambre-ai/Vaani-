@@ -1,4 +1,5 @@
 """ConflictAgent: compares new decisions against similar past ones and classifies conflicts."""
+import asyncio
 from pydantic import BaseModel
 from typing import Optional
 from app.llm_router import chat_json
@@ -50,3 +51,60 @@ Is there a conflict?"""
     ]
     raw = await chat_json(messages)
     return ConflictResult(**raw)
+
+
+async def detect_conflicts_batch(
+    pairs: list[tuple[models.Decision, models.Decision, str, str]],
+) -> list[ConflictResult]:
+    """Classify several independent decision pairs in one model request."""
+    if not pairs:
+        return []
+
+    comparisons = []
+    for index, (new_decision, past_decision, new_date, past_date) in enumerate(pairs):
+        comparisons.append(
+            f"COMPARISON {index}\n"
+            f"NEW DECISION ({new_date}): {new_decision.statement}\n"
+            f"NEW EVIDENCE: {new_decision.evidence_quote or ''}\n"
+            f"PAST DECISION ({past_date}): {past_decision.statement}\n"
+            f"PAST EVIDENCE: {past_decision.evidence_quote or ''}"
+        )
+
+    messages = [
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT + """
+
+You will receive multiple numbered comparisons. Assess each independently.
+Return exactly one result for every comparison, using its index:
+{"results":[{"candidate_index":0,"has_conflict":false,"type":null,"severity":null,"explanation":null}]}
+Do not compare decisions across different comparison numbers. Cite both dates and evidence when a conflict exists.""",
+        },
+        {"role": "user", "content": "\n\n".join(comparisons)},
+    ]
+    try:
+        raw = await chat_json(messages)
+        results = raw.get("results") if isinstance(raw, dict) else None
+        if not isinstance(results, list):
+            raise ValueError("Conflict agent returned an invalid batch response")
+
+        parsed: dict[int, ConflictResult] = {}
+        for result in results:
+            if not isinstance(result, dict):
+                raise ValueError("Conflict agent returned an invalid comparison")
+            index = result.get("candidate_index")
+            if not isinstance(index, int) or index < 0 or index >= len(pairs) or index in parsed:
+                raise ValueError("Conflict agent returned an invalid comparison index")
+            parsed[index] = ConflictResult(**{
+                key: value for key, value in result.items() if key != "candidate_index"
+            })
+        if len(parsed) != len(pairs):
+            raise ValueError("Conflict agent omitted one or more comparisons")
+        return [parsed[index] for index in range(len(pairs))]
+    except (KeyError, TypeError, ValueError):
+        # Keep the original per-pair path as a reliability fallback if a model
+        # fails to honor the batch schema. Normal requests still use one call.
+        return await asyncio.gather(*(
+            detect_conflict(new, old, new_date, old_date)
+            for new, old, new_date, old_date in pairs
+        ))

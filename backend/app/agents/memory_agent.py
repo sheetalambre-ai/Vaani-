@@ -10,22 +10,44 @@ _TOKEN = re.compile(r"(?u)\b\w\w+\b")
 
 async def embed_text(text: str) -> list[float]:
     """Embed using Gemini when configured; retrieval falls back to TF-IDF on failure."""
-    if settings.GEMINI_API_KEY and settings.GEMINI_EMBED_MODEL:
-        try:
-            return await _gemini_embed(text)
-        except Exception:
-            return []
-    return []  # empty signals TF-IDF fallback at retrieval time
+    embeddings = await embed_texts([text])
+    return embeddings[0] if embeddings else []
 
 
-async def _gemini_embed(text: str) -> list[float]:
-    import httpx
-    url = f"https://generativelanguage.googleapis.com/v1beta/{settings.GEMINI_EMBED_MODEL}:embedContent?key={settings.GEMINI_API_KEY}"
-    payload = {"model": settings.GEMINI_EMBED_MODEL, "content": {"parts": [{"text": text}]}}
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(url, json=payload)
-        resp.raise_for_status()
-        return resp.json()["embedding"]["values"]
+async def embed_texts(texts: list[str]) -> list[list[float]]:
+    """Embed multiple decisions in one Gemini request, preserving TF-IDF fallback."""
+    if not texts:
+        return []
+    if not settings.GEMINI_API_KEY or not settings.GEMINI_EMBED_MODEL:
+        return [[] for _ in texts]
+
+    model = settings.GEMINI_EMBED_MODEL
+    model_path = model if model.startswith("models/") else f"models/{model}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/{model_path}:batchEmbedContents"
+    payload = {
+        "requests": [
+            {"model": model_path, "content": {"parts": [{"text": text}]}}
+            for text in texts
+        ]
+    }
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                url,
+                json=payload,
+                headers={"x-goog-api-key": settings.GEMINI_API_KEY},
+            )
+            response.raise_for_status()
+            embeddings = response.json()["embeddings"]
+            if len(embeddings) != len(texts):
+                raise ValueError("Gemini returned an incomplete embedding batch")
+            return [item["values"] for item in embeddings]
+    except Exception:
+        # A retired/unavailable model or invalid credentials cannot be fixed by
+        # retrying the same request once per decision; use the existing local
+        # TF-IDF retrieval path instead.
+        return [[] for _ in texts]
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
