@@ -97,6 +97,7 @@ export default function ReviewScreen({ data: initialData, onPublished, onNewMeet
   }
 
   async function handlePublish() {
+    if (!window.confirm(`Publish ${approvedCount} approved item${approvedCount === 1 ? "" : "s"} from “${data.title}” to the connected tracker?`)) return;
     setPublishing(true);
     try {
       const result = await publishMeeting(data.meeting_id);
@@ -111,6 +112,11 @@ export default function ReviewScreen({ data: initialData, onPublished, onNewMeet
   }
 
   const approvedCount = data.action_items.filter((a) => a.status === "approved").length;
+  const actionCount = data.action_items?.length || 0;
+  const awaitingReview = data.action_items.filter((item) => item.status === "pending_review").length;
+  const reviewedCount = actionCount - awaitingReview;
+  const reviewProgress = actionCount ? Math.round((reviewedCount / actionCount) * 100) : 100;
+  const openConflictCount = (data.conflicts || []).filter((conflict) => conflict.resolution === "open").length;
 
   return (
     <div className="review-screen space-y-7">
@@ -144,6 +150,17 @@ export default function ReviewScreen({ data: initialData, onPublished, onNewMeet
           {publishing ? "Publishing…" : `Publish ${approvedCount} approved item${approvedCount !== 1 ? "s" : ""}`}
         </button>
       </div>
+
+      <section className="review-overview" aria-label="Meeting processing summary">
+        <div className="review-success-state"><span aria-hidden="true">✓</span><div><b>Meeting processed</b><p>{data.decisions?.length || 0} decisions · {actionCount} action items · {openConflictCount} open conflicts. Nothing has been posted yet.</p></div></div>
+        <div className="review-progress-card"><div><b>Review progress</b><span>{reviewedCount} of {actionCount} items reviewed</span></div><div className="review-progress-track"><span style={{ width: `${reviewProgress}%` }} /></div><small>{awaitingReview ? `${awaitingReview} still need review` : "All action items reviewed"}</small></div>
+        <ol className="review-timeline" aria-label="Meeting analysis timeline">
+          <li className="complete"><span>1</span><div><b>Conversation captured</b><small>{new Date(data.held_at).toLocaleDateString()}</small></div></li>
+          <li className="complete"><span>2</span><div><b>Decisions extracted</b><small>{data.decisions?.length || 0} found</small></div></li>
+          <li className="complete"><span>3</span><div><b>Actions assigned</b><small>{actionCount} found</small></div></li>
+          <li className={openConflictCount ? "has-conflicts" : "complete"}><span>4</span><div><b>Memory conflict check</b><small>{openConflictCount ? `${openConflictCount} need a decision` : "No open conflicts"}</small></div></li>
+        </ol>
+      </section>
 
       {/* Voice correction */}
       <div className="review-correction bg-gray-900 border border-gray-700 rounded-xl">
@@ -196,22 +213,21 @@ export default function ReviewScreen({ data: initialData, onPublished, onNewMeet
       {/* Conflicts */}
       {data.conflicts?.length > 0 && (
         <Section className="review-conflicts" title={`Conflict check · ${data.conflicts.length}`}>
+          <div className="conflict-legend"><span className="legend-reversal">● Reversal / contradiction</span><span className="legend-warning">● Deadline / ownership / scope</span><span className="legend-resolved">● Resolved</span></div>
           {data.conflicts.map((c) => {
             const newD = data.decisions.find((d) => d.id === c.new_decision_id);
             const oldD = data.decisions.find((d) => d.id === c.old_decision_id);
+            const tone = c.resolution !== "open" ? "resolved" : c.type === "reversal" ? "reversal" : "warning";
             return (
-              <div key={c.id} className="review-conflict-card bg-gray-900 border border-red-700/50 rounded-xl p-4 space-y-3">
+              <div key={c.id} className={`review-conflict-card conflict-${tone} bg-gray-900 border border-red-700/50 rounded-xl p-4 space-y-3`}>
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase ${
-                    c.severity === "high" ? "bg-red-700 text-red-100" :
-                    c.severity === "medium" ? "bg-amber-700 text-amber-100" : "bg-yellow-800 text-yellow-100"
-                  }`}>{c.severity}</span>
-                  <span className="text-sm text-red-300 font-medium capitalize">{c.type}</span>
+                  <span className={`conflict-type-pill pill-${tone}`}>{c.resolution !== "open" ? "Resolved" : c.type === "reversal" ? "Reversal" : "Needs review"}</span>
+                  <span className="text-sm font-semibold capitalize">{c.type} · {c.severity || "review"}</span>
                   {c.resolution !== "open" && (
-                    <span className="ml-auto text-xs text-gray-500">Resolved: {c.resolution}</span>
+                    <span className="ml-auto text-xs text-gray-500">{c.resolution === "accepted_new" ? "Kept newer decision" : "Kept earlier decision"}</span>
                   )}
                 </div>
-                <p className="text-sm text-gray-300">{c.explanation}</p>
+                <p className="conflict-explanation">{c.explanation || "These decisions differ. Compare the evidence, then choose which version should remain active."}</p>
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="bg-gray-800 rounded-lg p-3">
                     <p className="text-gray-500 mb-1">New decision</p>

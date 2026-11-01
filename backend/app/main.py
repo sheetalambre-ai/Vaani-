@@ -135,6 +135,22 @@ async def complete_item(item_id: int, db: AsyncSession = Depends(get_db)):
     return {"id": item_id, "status": "done"}
 
 
+@app.post("/items/{item_id}/publish")
+async def publish_item(item_id: int, db: AsyncSession = Depends(get_db)):
+    """Publish one explicitly approved task to the configured tracker."""
+    item = await repository.get_action_item(db, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.status != "approved":
+        raise HTTPException(status_code=400, detail="Only approved items can be published")
+    try:
+        external_ref = await executor_agent.create_task(item)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Tracker publish failed: {exc}") from exc
+    await repository.update_action_item(db, item_id, {"status": "created", "external_ref": external_ref})
+    return {"id": item_id, "status": "created", "external_ref": external_ref}
+
+
 @app.patch("/items/{item_id}")
 async def patch_item(item_id: int, body: ItemPatch, db: AsyncSession = Depends(get_db)):
     item = await repository.get_action_item(db, item_id)

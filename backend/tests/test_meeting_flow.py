@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from app import repository
 from app.agents import conflict_agent, memory_agent
-from app.main import publish_meeting, correct_meeting, CorrectionCreate
+from app.main import publish_meeting, publish_item, correct_meeting, CorrectionCreate
 from app.agents.extraction_agent import ActionItemExtract, DecisionExtract, ExtractionResult
 from app.models import ActionItem, Conflict, Correction, Decision, Meeting, Reminder, Utterance
 from app.seed import purge_known_demo_data
@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from app.agents.digest_agent import build_digest
 from app.pipeline import build_review_payload
 from app.agents.correction_agent import CorrectionPatch
+from app.agents import transcript_agent
 
 
 def test_extraction_schema_validity():
@@ -30,6 +31,14 @@ def test_extraction_schema_validity():
     )
     assert result.action_items[0].owner == "Priya"
     assert result.action_items[0].due_date == "2026-11-06"
+
+
+def test_transcript_parser_preserves_numbered_speaker_labels():
+    utterances, cleaned = transcript_agent.parse_transcript(
+        "Speaker 1: We should start in October.\nSpeaker 2: I will own the launch checklist."
+    )
+    assert [utterance.speaker for utterance in utterances] == ["Speaker 1", "Speaker 2"]
+    assert "Speaker 2: I will own the launch checklist." in cleaned
 
 
 @pytest.mark.asyncio
@@ -223,3 +232,26 @@ async def test_apply_decision_correction_refreshes_memory_embedding(db_session, 
     await db_session.refresh(decision)
     assert decision.statement == "Launch in November"
     assert decision.embedding == [0.3, 0.4]
+
+
+@pytest.mark.asyncio
+async def test_publish_one_approved_item(db_session, monkeypatch):
+    meeting = Meeting(title="Kanban publishing", held_at=datetime.utcnow(), raw_input="Publish one approved item.")
+    db_session.add(meeting)
+    await db_session.flush()
+    item = ActionItem(meeting_id=meeting.id, task="Update the launch checklist", owner="Mina", status="approved")
+    db_session.add(item)
+    await db_session.flush()
+
+    async def create_task(approved_item):
+        assert approved_item.id == item.id
+        return "https://tracker.example/tasks/123"
+
+    monkeypatch.setattr("app.main.executor_agent.create_task", create_task)
+    result = await publish_item(item.id, db_session)
+
+    await db_session.refresh(item)
+    assert result["status"] == "created"
+    assert result["external_ref"] == "https://tracker.example/tasks/123"
+    assert item.status == "created"
+    assert item.external_ref == "https://tracker.example/tasks/123"

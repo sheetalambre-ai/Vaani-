@@ -11,6 +11,7 @@ class Utterance(BaseModel):
 FILLER_PATTERN = re.compile(
     r"\b(um+|uh+|er+|ah+|like,?\s+|you know,?\s+|so um|okay so|i mean,?\s+)\b", re.IGNORECASE
 )
+SPEAKER_LINE = re.compile(r"^([^:\n]{1,30}):\s+(.+)$")
 
 
 def _strip_fillers(text: str) -> str:
@@ -27,12 +28,13 @@ def parse_transcript(raw: str) -> tuple[list[Utterance], str]:
     lines = [l.strip() for l in raw.strip().splitlines() if l.strip()]
     utterances: list[Utterance] = []
 
-    # Check if any line looks like "Name: text"
-    has_labels = any(re.match(r"^[A-Za-z ]{1,30}:\s+\S", l) for l in lines)
+    # Accept numbered and Unicode speaker labels too (for example, Speaker 1
+    # or Devanagari names), not only plain ASCII names.
+    has_labels = any(SPEAKER_LINE.match(line) for line in lines)
 
     if has_labels:
         for line in lines:
-            m = re.match(r"^([A-Za-z ]{1,30}):\s+(.+)$", line)
+            m = SPEAKER_LINE.match(line)
             if m:
                 speaker = m.group(1).strip().title()
                 text = _strip_fillers(m.group(2).strip())

@@ -39,6 +39,10 @@ export async function completeItem(itemId) {
   return request(`/items/${itemId}/complete`, { method: "POST" });
 }
 
+export async function publishItem(itemId) {
+  return request(`/items/${itemId}/publish`, { method: "POST" });
+}
+
 export async function patchItem(itemId, data) {
   return request(`/items/${itemId}`, {
     method: "PATCH",

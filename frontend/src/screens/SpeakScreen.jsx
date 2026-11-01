@@ -1,160 +1,196 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useRef, useState } from "react";
 import { submitMeeting } from "../api.js";
 
-const TABS = ["dictate", "paste"];
+const SAMPLE_TITLE = "Launch planning · sample";
+const SAMPLE_TRANSCRIPT = `Speaker 1: We will launch onboarding on November 21 instead of December 5.\nSpeaker 2: I will publish the onboarding checklist by November 14.\nSpeaker 1: Keep the monthly price at $39 through launch.\nSpeaker 2: I can finish the checklist by Friday—no, make that Thursday.`;
+
+const MODES = [
+  { id: "wispr", icon: "◉", title: "Wispr Flow", detail: "Recommended · dictate by voice" },
+  { id: "transcript", icon: "▤", title: "Existing transcript", detail: "Upload a text file or paste" },
+  { id: "notes", icon: "✎", title: "Manual notes", detail: "Type rough notes in your words" },
+];
 
 export default function SpeakScreen({ onReview, onOpenReview }) {
-  const [tab, setTab] = useState("dictate");
+  const [mode, setMode] = useState("wispr");
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
+  const [captureStatus, setCaptureStatus] = useState("");
+  const [fileName, setFileName] = useState("");
   const textareaRef = useRef(null);
-
-  useEffect(() => {
-    if (textareaRef.current) textareaRef.current.focus();
-  }, [tab]);
+  const fileRef = useRef(null);
 
   async function handleSubmit() {
-    if (!text.trim()) return;
+    if (!text.trim() || loading) return;
     setLoading(true);
-    setError(null);
+    setError("");
+    setCaptureStatus("Vaani is extracting decisions, action items, and cross-meeting conflicts…");
     try {
-      const data = await submitMeeting(text, title || undefined);
+      const data = await submitMeeting(text, title.trim() || undefined);
       onReview(data);
     } catch (e) {
-      setError(e.message || "Something went wrong");
+      setError(e.message || "Could not process this meeting");
+      setCaptureStatus("");
     } finally {
       setLoading(false);
     }
   }
 
-  return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-5">
-        <div>
-          <p className="screen-eyebrow">Voice intelligence interface</p>
-          <h1 className="screen-title">Where conversations<br className="hidden sm:block" /> become action.</h1>
-          <p className="screen-subtitle">Capture what was said. Leave with decisions, owners, and a clear next step.</p>
-        </div>
-      </div>
+  function chooseMode(nextMode) {
+    setMode(nextMode);
+    setCaptureStatus("");
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
 
-      <section className="voice-hero">
-        <div className="relative z-10 grid lg:grid-cols-[1.05fr_.95fr] gap-6 p-5 sm:p-7 lg:p-9">
-          <div className="flex flex-col justify-between min-h-[330px]">
-            <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/60 px-3 py-1.5 text-xs text-gray-500 shadow-sm">
-                <span className="status-dot" /> Ready when you are
-              </span>
-              <h2 className="mt-5 max-w-lg font-serif text-3xl sm:text-4xl leading-tight text-gray-900">A better way to remember what matters.</h2>
-              <p className="mt-3 max-w-md text-sm leading-6 text-gray-500">Speak naturally. Vaaniमंथन finds decisions, self-corrections, and commitments across your meetings.</p>
-            </div>
-            <div className="mt-5">
-              <VoiceWave />
-              <div className="mt-4 flex flex-wrap gap-x-8 gap-y-4">
-                <Step label="LISTEN" detail="Capture every voice" icon="♩" />
-                <Step label="UNDERSTAND" detail="Find what matters" icon="✦" />
-                <Step label="EXECUTE" detail="Turn decisions into action" icon="↗" />
-              </div>
-            </div>
+  function focusWisprField() {
+    textareaRef.current?.focus();
+    setCaptureStatus("Transcript field focused. Use your configured Wispr Flow shortcut to dictate; the words will appear here.");
+  }
+
+  async function handleTranscriptFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const contents = await file.text();
+      setText(contents);
+      setFileName(file.name);
+      setTitle((current) => current || file.name.replace(/\.[^.]+$/, ""));
+      setMode("transcript");
+      setCaptureStatus(hasSpeakerLabels(contents)
+        ? `Loaded ${file.name}. Speaker labels were found; review them before processing.`
+        : `Loaded ${file.name}. No speaker labels found—add “Speaker: words” lines for attribution.`);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    } catch {
+      setError("Could not read that transcript file. Try a .txt or .md file.");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  function loadSample() {
+    setMode("transcript");
+    setTitle(SAMPLE_TITLE);
+    setText(SAMPLE_TRANSCRIPT);
+    setFileName("");
+    setError("");
+    setCaptureStatus("Sample loaded locally. Nothing is saved until you choose Process meeting.");
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
+  const currentMode = MODES.find((option) => option.id === mode);
+  const labelsPresent = hasSpeakerLabels(text);
+
+  return (
+    <div className="speak-screen">
+      <header className="capture-page-header">
+        <div>
+          <p className="screen-eyebrow">Meeting-to-execution agent</p>
+          <h1 className="screen-title">From conversation to clear action.</h1>
+          <p className="screen-subtitle">Start with Wispr Flow, add the conversation, then review what Vaani finds.</p>
+        </div>
+        <button type="button" className="board-secondary-button sample-load-button" onClick={loadSample}>Try a sample transcript</button>
+      </header>
+
+      <ol className="capture-workflow" aria-label="Meeting capture steps">
+        <li className="is-current"><span>01</span><div><b>Start meeting</b><small>Name this conversation</small></div></li>
+        <li className={text.trim() ? "is-current" : ""}><span>02</span><div><b>Add conversation</b><small>Wispr, transcript, or notes</small></div></li>
+        <li><span>03</span><div><b>Extract actions</b><small>Review before anything posts</small></div></li>
+      </ol>
+
+      <section className="capture-workspace">
+        <aside className="capture-mode-panel">
+          <p className="screen-eyebrow">Step 2 · Add conversation</p>
+          <h2>Choose your input</h2>
+          <div className="capture-mode-list" role="tablist" aria-label="Meeting input type">
+            {MODES.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                role="tab"
+                aria-selected={mode === option.id}
+                className={`capture-mode-option ${mode === option.id ? "is-selected" : ""}`}
+                onClick={() => chooseMode(option.id)}
+              >
+                <span className="capture-mode-icon" aria-hidden="true">{option.icon}</span>
+                <span><b>{option.title}</b><small>{option.detail}</small></span>
+                <span className="capture-mode-check" aria-hidden="true">{mode === option.id ? "✓" : ""}</span>
+              </button>
+            ))}
+          </div>
+          <div className="capture-memory-note"><span aria-hidden="true">✦</span><p><b>After capture</b><br />Vaani compares decisions with your meeting memory, then prepares actions, reminders, and a weekly digest.</p></div>
+        </aside>
+
+        <div className="capture-editor">
+          <div className="capture-editor-heading">
+            <div><p className="screen-eyebrow">New meeting</p><h2>{mode === "wispr" ? "Speak with Wispr Flow" : mode === "transcript" ? "Add an existing transcript" : "Write meeting notes"}</h2></div>
+            <span className="capture-private-pill"><span className="status-dot" /> Private until you approve</span>
           </div>
 
-          <div className="paper-card p-4 sm:p-5 flex flex-col">
-            <div className="flex items-center justify-between gap-4 mb-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[.14em] text-violet-400">New meeting</p>
-                <p className="mt-1 text-sm text-gray-500">Start with your voice or a transcript</p>
+          <label className="capture-title-label" htmlFor="meeting-title">Meeting title <span>Optional</span></label>
+          <input id="meeting-title" type="text" placeholder="e.g. Product roadmap sync" value={title} onChange={(event) => setTitle(event.target.value)} className="capture-title-input" />
+
+          {mode === "wispr" && (
+            <div className="wispr-live-card">
+              <div className="wispr-live-heading"><span className="wispr-mic-icon" aria-hidden="true">♩</span><div><b>Wispr Flow dictation</b><p>Focus this field, then dictate with the Wispr Flow shortcut on your computer.</p></div><span className="live-state"><i /> READY</span></div>
+              <div className="wispr-steps">
+                <p><span>1</span> Click <b>Focus field for Wispr</b> below.</p>
+                <p><span>2</span> On Windows, use the default <b>Ctrl+Win</b> push-to-talk shortcut (hold while speaking). Hands-free defaults to <b>Ctrl+Win+Space</b>.</p>
+                <p><span>3</span> Release the shortcut. Wispr Flow inserts your words into the field; say speaker names aloud for attribution.</p>
               </div>
-              <span className="step-orb !w-10 !h-10">✳</span>
+              <p className="wispr-integration-note">Vaani does not open Wispr or request browser microphone access. Wispr Flow handles dictation; Vaani analyzes the text inserted here.</p>
             </div>
+          )}
 
-            <input
-              type="text"
-              placeholder="Meeting title (optional)"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-violet-500"
-            />
-
-            <div className="mt-4 flex gap-2 border-b border-gray-800">
-              {TABS.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={`pb-2.5 px-3 text-sm font-medium transition-colors border-b-2 ${
-                    tab === t ? "border-violet-500 text-violet-400" : "border-transparent text-gray-500 hover:text-gray-300"
-                  }`}
-                >
-                  {t === "dictate" ? "◉ Dictate" : "▤ Paste transcript"}
-                </button>
-              ))}
+          {mode === "transcript" && (
+            <div className="transcript-import-row">
+              <div><b>Speaker-labelled transcript</b><small>Use one “Speaker: words” line per turn. Plain .txt and .md files work best.</small></div>
+              <input ref={fileRef} type="file" accept=".txt,.md,text/plain,text/markdown" onChange={handleTranscriptFile} className="transcript-file-input" aria-label="Upload a transcript text file" />
+              <button type="button" className="board-secondary-button" onClick={() => fileRef.current?.click()}>↑ Upload transcript</button>
             </div>
+          )}
 
-            <p className="capture-hint">
-              {tab === "dictate"
-                ? "Wispr Flow types your voice into this focused field. For multiple speakers, say each name or paste a speaker-labelled transcript."
-                : "Paste a meeting transcript with one speaker per line. Wispr Notetaker transcripts can be copied here with their speaker labels."}
-            </p>
+          {mode === "notes" && <p className="manual-notes-hint">Write rough notes freely. Vaani will treat unlabeled notes as one speaker; add names like “Speaker 1:” if you know who said what.</p>}
 
-            <textarea
-              ref={textareaRef}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={tab === "dictate" ? "Click here, then dictate your notes with Wispr Flow…" : "Paste a speaker-labelled transcript here, e.g.\nSpeaker 1: We should launch at $49/month.\nSpeaker 2: Agreed, let's launch in November."}
-              className="mt-3 w-full min-h-[142px] flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-violet-500 resize-y leading-relaxed"
-            />
+          <div className="live-transcript-heading"><label htmlFor="meeting-transcript">{mode === "wispr" ? "Live transcription area" : mode === "transcript" ? "Transcript text" : "Meeting notes"}</label>{mode === "wispr" && <span className={text ? "transcript-ready" : "transcript-waiting"}>{text ? "● Text received" : "○ Waiting for dictation"}</span>}</div>
+          <textarea
+            id="meeting-transcript"
+            ref={textareaRef}
+            value={text}
+            onChange={(event) => { setText(event.target.value); setError(""); setCaptureStatus(""); }}
+            placeholder={mode === "wispr"
+              ? "Click Focus field for Wispr, then use the Wispr Flow hotkey. Dictated words will appear here…"
+              : mode === "transcript"
+                ? "Paste a transcript here…\nSpeaker 1: We should launch at $49/month.\nSpeaker 2: I’ll own the pricing page by Friday."
+                : "Write notes in your own words…\nExample: The team agreed to keep the current price. One person will update the launch checklist by Friday."}
+            className="capture-transcript-input"
+            spellCheck="true"
+          />
 
-            <details className="wispr-guide">
-              <summary><span>♩ Wispr Flow · quick guide</span><span>How to capture a meeting</span></summary>
-              <div className="wispr-guide-body">
-                <div><b>1 · Dictate into Vaani</b><p>Click the transcript box, then use your Wispr Flow shortcut. On Windows the defaults are Ctrl+Win (push to talk) and Ctrl+Win+Space (hands-free); shortcuts can be changed in Wispr settings.</p></div>
-                <div><b>2 · Preserve speaker names</b><p>Flow dictation captures the speaker using the microphone. For a group transcript, use Wispr Notetaker’s speaker-labelled transcript or your meeting app’s transcript, then paste it above. When dictating manually, say each speaker’s name before their turn.</p></div>
-                <div><b>3 · Check, then process</b><p>Review names, dates, and amounts before processing. Vaani extracts decisions and tasks, checks earlier meeting decisions for conflicts, and keeps items private until you approve publishing.</p></div>
-                <div className="wispr-links"><a href="https://docs.wisprflow.ai/articles/6409258247-flow-bubble-requirements" target="_blank" rel="noreferrer">Wispr Flow dictation guide ↗</a><a href="https://docs.wisprflow.ai/articles/4091106439-The-live-transcript-in-Notetaker" target="_blank" rel="noreferrer">Speaker-labelled Notetaker transcripts ↗</a></div>
-                <p className="wispr-note">Wispr Flow is the voice-to-text layer; Vaani receives the text inserted here. There is no direct Wispr API connection or automatic meeting-audio capture.</p>
-              </div>
-            </details>
+          {mode !== "wispr" && text.trim() && <p className={`speaker-check ${labelsPresent ? "has-labels" : "needs-labels"}`}>{labelsPresent ? "✓ Speaker labels detected" : "! No speaker labels detected — Vaani will attribute these notes to Unknown"}</p>}
+          {fileName && mode === "transcript" && <p className="file-loaded-note">Loaded locally: <b>{fileName}</b></p>}
 
-            <div className="capture-next-steps" aria-label="What Vaani does after capture">
-              <span><b>Review</b> Confirm decisions, owners, dates, and conflicts.</span>
-              <span><b>Approve</b> Choose what can be posted to your tracker.</span>
-              <span><b>Follow up</b> Get reminders and a weekly digest per person.</span>
-            </div>
-
-            {error && <div role="alert" className="mt-3 bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">{error}</div>}
-
-            <button
-              onClick={handleSubmit}
-              disabled={loading || !text.trim()}
-              className="mt-4 w-full py-3 rounded-full bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
-            >
-              {loading ? "Finding decisions and action items…" : "Process meeting  →"}
+          <div className="capture-actions-row">
+            {mode === "wispr" ? <button type="button" className="board-secondary-button focus-wispr-button" onClick={focusWisprField}>♩ Focus field for Wispr</button> : <button type="button" className="text-action-button" onClick={() => { setText(""); setFileName(""); setCaptureStatus(""); }}>Clear input</button>}
+            <span className="capture-actions-spacer" />
+            {mode === "wispr" && <button type="button" className="text-action-button" onClick={loadSample}>Load sample input</button>}
+            <button type="button" onClick={handleSubmit} disabled={loading || !text.trim()} className="board-primary-button process-meeting-button">
+              {loading ? <><span className="processing-spinner" aria-hidden="true" /> Extracting decisions & actions…</> : "Process meeting →"}
             </button>
           </div>
+
+          {captureStatus && <p className="capture-status" role="status">{captureStatus}</p>}
+          {loading && <div className="capture-progress" role="status"><span /><p>Checking decisions against meeting memory and extracting owners and deadlines…</p></div>}
+          {error && <div role="alert" className="capture-error">{error}</div>}
+          <p className="capture-no-save-note">A sample or transcript stays in this form until you press Process meeting.</p>
         </div>
       </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-gray-500">
-        <span>Private until you choose to publish.</span>
-        <button onClick={() => onOpenReview?.()} className="hover:text-violet-400 transition-colors">Go to review workspace →</button>
-      </div>
+      <footer className="capture-footer"><span>Listen · Understand · Execute</span><button type="button" onClick={() => onOpenReview?.()}>Open review workspace →</button></footer>
     </div>
   );
 }
 
-function Step({ label, detail, icon }) {
-  return <div className="step-chip"><span className="step-orb">{icon}</span><span><strong>{label}</strong><small>{detail}</small></span></div>;
-}
-
-function VoiceWave() {
-  return (
-    <svg className="voice-wave max-w-[560px]" viewBox="0 0 920 220" aria-hidden="true" preserveAspectRatio="none">
-      <defs><linearGradient id="waveGradient" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="#e7c7aa" /><stop offset=".48" stopColor="#9180c0" /><stop offset="1" stopColor="#e6c5a6" /></linearGradient></defs>
-      <path className="wave-glow" d="M0 117 C90 115 98 74 176 92 S270 157 356 110 456 50 536 88 633 164 716 119 823 64 920 107" />
-      <path className="wave-purple" d="M0 128 C74 125 108 94 176 105 S270 146 354 118 442 69 524 97 632 149 712 123 830 82 920 116" />
-      <path className="wave-purple" d="M0 105 C86 108 115 143 187 124 S278 77 362 105 452 151 535 125 627 75 711 102 824 146 920 111" />
-      <path className="wave-core" d="M0 116 C83 116 121 85 184 99 S280 149 357 115 455 62 535 96 628 153 715 119 831 78 920 112" />
-      <path className="wave-glow" d="M0 92 C80 94 126 127 194 113 S281 77 360 94 453 135 538 116 631 81 710 95 831 130 920 101" />
-    </svg>
-  );
+function hasSpeakerLabels(value) {
+  return value.split(/\r?\n/).some((line) => /^[^:\n]{1,30}:\s+\S/.test(line.trim()));
 }
