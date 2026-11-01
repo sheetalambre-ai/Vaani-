@@ -10,6 +10,7 @@ from app.models import ActionItem, Conflict, Decision, Meeting, Reminder, Uttera
 from app.seed import purge_known_demo_data
 from datetime import datetime, timedelta
 from app.agents.digest_agent import build_digest
+from app.pipeline import build_review_payload
 
 
 def test_extraction_schema_validity():
@@ -145,3 +146,14 @@ async def test_weekly_digest_keeps_tasks_and_conflicts(db_session):
     assert digest["due_this_week"][0]["task"] == "Publish the onboarding checklist"
     assert digest["open_conflicts"] == 1
     assert digest["open_conflict_items"][0]["old_decision"] == "Onboarding was planned for December"
+
+    # A conflict belongs to both the new and earlier meeting in memory. Review
+    # from either meeting should show the conflict and its counterpart decision.
+    earlier_conflicts = await repository.get_meeting_conflicts(db_session, earlier.id)
+    assert len(earlier_conflicts) == 1
+    earlier_review = await build_review_payload(db_session, earlier.id)
+    assert len(earlier_review["conflicts"]) == 1
+    assert {d["statement"] for d in earlier_review["decisions"]} == {
+        "Asha will ship onboarding on Nov 20",
+        "Onboarding was planned for December",
+    }

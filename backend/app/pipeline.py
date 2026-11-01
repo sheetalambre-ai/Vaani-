@@ -183,9 +183,15 @@ async def build_review_payload(db: AsyncSession, meeting_id: int) -> dict:
 
     # Conflicts for this meeting
     conflicts = await repository.get_meeting_conflicts(db, meeting_id)
-    old_ids = {c.old_decision_id for c in conflicts} - {d.id for d in decisions}
-    if old_ids:
-        rows = await db.execute(select(models.Decision).where(models.Decision.id.in_(old_ids)))
+    meeting_decision_ids = {d.id for d in decisions}
+    related_ids = {
+        decision_id
+        for conflict in conflicts
+        for decision_id in (conflict.new_decision_id, conflict.old_decision_id)
+        if decision_id not in meeting_decision_ids
+    }
+    if related_ids:
+        rows = await db.execute(select(models.Decision).where(models.Decision.id.in_(related_ids)))
         decisions.extend(rows.scalars().all())
 
     # Corrections

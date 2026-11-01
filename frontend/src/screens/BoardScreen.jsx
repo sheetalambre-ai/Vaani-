@@ -5,7 +5,7 @@ const STATUS_ORDER = ["pending_review", "approved", "created", "done", "rejected
 const STATUS_META = {
   pending_review: { label: "Needs review", color: "review", icon: "◇" },
   approved: { label: "Approved", color: "approved", icon: "✓" },
-  created: { label: "In progress", color: "active", icon: "↗" },
+  created: { label: "Published · in tracker", color: "active", icon: "↗" },
   done: { label: "Completed", color: "done", icon: "✓" },
   rejected: { label: "Declined", color: "rejected", icon: "×" },
 };
@@ -106,7 +106,8 @@ export default function BoardScreen({ onNewMeeting, onOpenReview }) {
     }
   }, [peopleKey, digestPerson]);
   const pendingCount = allItems.filter((item) => item.status === "pending_review").length;
-  const approvedCount = allItems.filter((item) => item.status === "approved" || item.status === "created").length;
+  const approvedCount = allItems.filter((item) => item.status === "approved").length;
+  const publishedCount = allItems.filter((item) => item.status === "created").length;
   const doneCount = allItems.filter((item) => item.status === "done").length;
   const dueSoonCount = allItems.filter((item) => {
     if (!item.due_date || ["done", "rejected"].includes(item.status)) return false;
@@ -133,9 +134,10 @@ export default function BoardScreen({ onNewMeeting, onOpenReview }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <Metric label="Needs review" value={pendingCount} icon="◇" color="review" />
-        <Metric label="Approved / active" value={approvedCount} icon="↗" color="active" />
+        <Metric label="Approved" value={approvedCount} icon="✓" color="approved" />
+        <Metric label="Published · in tracker" value={publishedCount} icon="↗" color="active" />
         <Metric label="Due this week" value={dueSoonCount} icon="◷" color="due" />
         <Metric label="Completed" value={doneCount} icon="✓" color="done" />
       </div>
@@ -195,7 +197,11 @@ export default function BoardScreen({ onNewMeeting, onOpenReview }) {
             <DigestSection label="Overdue" items={digest.overdue} color="red" />
             <DigestSection label="Done" items={digest.done} color="green" />
             {digest.relevant_decisions?.length > 0 && <div className="digest-detail"><p>Relevant decisions</p>{digest.relevant_decisions.map((d) => <div key={d.id}>{d.statement}</div>)}</div>}
-            <div className="digest-detail"><p>Open conflicts · {digest.open_conflicts}</p>{digest.open_conflict_items?.length ? digest.open_conflict_items.map((conflict) => <div className="digest-conflict" key={conflict.id}>{conflict.explanation || `${conflict.type} conflict`}</div>) : <span className="digest-muted">No open conflicts affecting {digest.person}.</span>}</div>
+            <div className="digest-detail"><p>Open conflicts · {digest.open_conflicts}</p>{digest.open_conflict_items?.length ? digest.open_conflict_items.map((conflict) => <div className="digest-conflict" key={conflict.id}>
+              <span className={`conflict-severity severity-${(conflict.severity || "low").toLowerCase()}`}>{conflict.severity || "Review"} · {conflict.type || "decision"}</span>
+              <span>{conflict.explanation || "Earlier and newer decisions need reconciliation."}</span>
+              <small>Earlier: {conflict.old_decision}</small><small>New: {conflict.new_decision}</small>
+            </div>) : <span className="digest-muted">No open conflicts affecting {digest.person}.</span>}</div>
           </div>
         )}
           </section>
@@ -247,8 +253,22 @@ function DigestSection({ label, items, color = "gray" }) {
     <div className={`digest-group digest-${colors[color]}`}>
       <p>{label}<b>{items.length}</b></p>
       {items.map((i) => (
-        <div key={i.id}>{i.task} {i.due_date ? <small>{formatDue(i.due_date)}</small> : null}</div>
+        <div className="digest-task" key={i.id}>
+          <span>{i.task}</span>
+          <span className={`digest-status status-${i.status || "pending_review"}`}>{digestStatus(i.status)}</span>
+          {i.due_date ? <small>{formatDue(i.due_date)}</small> : null}
+        </div>
       ))}
     </div>
   );
+}
+
+function digestStatus(status) {
+  return ({
+    pending_review: "Needs review",
+    approved: "Approved · ready to publish",
+    created: "Published · in tracker",
+    done: "Completed",
+    rejected: "Declined",
+  })[status] || "Needs review";
 }

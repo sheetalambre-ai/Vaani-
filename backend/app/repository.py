@@ -1,6 +1,7 @@
 """Repository layer — all DB access goes through here so swapping SQLite → Supabase is isolated."""
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
+from sqlalchemy.orm import aliased
 from app import models
 from datetime import datetime
 from typing import Optional
@@ -150,9 +151,13 @@ async def resolve_conflict(db: AsyncSession, conflict_id: int, resolution: str):
 
 
 async def get_meeting_conflicts(db: AsyncSession, meeting_id: int) -> list[models.Conflict]:
+    new_decision = aliased(models.Decision)
+    old_decision = aliased(models.Decision)
     result = await db.execute(
-        select(models.Conflict).join(models.Decision, models.Conflict.new_decision_id == models.Decision.id)
-        .where(models.Decision.meeting_id == meeting_id)
+        select(models.Conflict)
+        .join(new_decision, models.Conflict.new_decision_id == new_decision.id)
+        .join(old_decision, models.Conflict.old_decision_id == old_decision.id)
+        .where(or_(new_decision.meeting_id == meeting_id, old_decision.meeting_id == meeting_id))
     )
     return list(result.scalars().all())
 

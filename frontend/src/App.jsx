@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import SpeakScreen from "./screens/SpeakScreen.jsx";
 import ReviewScreen from "./screens/ReviewScreen.jsx";
 import BoardScreen from "./screens/BoardScreen.jsx";
@@ -7,6 +7,12 @@ import { getReview } from "./api.js";
 export default function App() {
   const [screen, setScreen] = useState("speak"); // speak | review | board
   const [reviewData, setReviewData] = useState(null);
+  const [theme, setTheme] = useState(() => window.localStorage.getItem("vaani-theme") || "light");
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("vaani-theme", theme);
+  }, [theme]);
 
   const nav = (s) => setScreen(s);
 
@@ -37,6 +43,16 @@ export default function App() {
           ))}
         </nav>
         <div className="topbar-note"><span className="status-dot" /> Voice intelligence workspace</div>
+        <button
+          className="theme-toggle"
+          type="button"
+          onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+        >
+          <span aria-hidden="true">{theme === "dark" ? "☼" : "◐"}</span>
+          <span>{theme === "dark" ? "Light" : "Dark"}</span>
+        </button>
       </header>
 
       {/* Screens */}
